@@ -1,0 +1,22 @@
+name,category,default_quantity,notes,active,modules,children
+Passport,Documents,1,,true,Flight|International Travel,
+Passport Copy,Documents,1,Keep separate from the original,true,International Travel,
+Boarding Pass,Documents,1,Print or save to phone,true,Flight,
+Socks,Clothing,7,,true,,
+Swimsuit,Clothing,1,,true,Cruise|Pool,
+Flip Flops,Shoes,1,,true,Cruise|Pool,
+Portable Battery,Electronics,1,,true,Flight|Cruise|World Cup,
+Phone Charger,Electronics,1,,true,Flight,
+OM-D E-M1 Mk II,Camera,1,"Charge before departure, keep near passport",true,Camera|Underwater Photography,BLH-1 Battery|Battery Charger|Z-330 Strobe
+TG-7,Camera,1,,true,Camera|Underwater Photography,TG-7 Battery|TG-7 Charger|Memory Card|Z-330 Strobe
+BLH-1 Battery,Camera,3,,true,,
+Battery Charger,Camera,1,,true,,
+TG-7 Battery,Camera,2,,true,,
+TG-7 Charger,Camera,1,,true,,
+Memory Card,Camera,2,,true,,
+Z-330 Strobe,Camera,2,Shared strobe pair - auto-added with either camera body via the children column,true,,
+MF2 Strobe,Camera,2,Alternate strobe pair - selected via its own module instead of a parent/child link,true,MF2 Strobes,
+Old GoPro Mount,Camera,1,No longer used,false,,
+Motion Sickness Tablets,Medications,1,,true,Cruise,
+Toothbrush,Toiletries,1,,true,,
+Sunscreen,Toiletries,1,,true,Cruise|Pool|Beach Vacation,
