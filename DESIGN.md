@@ -1,7 +1,15 @@
 # Smart Packing Planner — Design & Requirements Document
 
-**Version:** 1.2
-**Supersedes:** 1.1, 1.0
+**Version:** 1.3
+**Supersedes:** 1.2, 1.1, 1.0
+
+---
+
+## Revision Summary (1.2 → 1.3)
+
+This revision swaps the primary authentication framework. It does not change any functional requirement's intent, only which library is the default recommendation.
+
+1. **Better Auth is now the primary authentication choice**, replacing Auth.js (NextAuth v5) as primary. Auth.js v5 remains an acceptable alternative (notably for teams migrating an existing Auth.js codebase) but is deprioritized because it is still beta-labeled in 2026 and the wider ecosystem, including Auth.js's own maintainers, now directs new projects to Better Auth. See Authentication section.
 
 ---
 
@@ -336,12 +344,12 @@ PostgreSQL
 
 **Database:** PostgreSQL, accessed exclusively through Prisma. Prisma provides strong typing, migrations, relationship management, query generation, and transactions. All persistent data resides in PostgreSQL.
 
-### Authentication (Revised in 1.1)
+### Authentication (Revised in 1.3)
 
-Version 1.0 specified hand-implemented username/password authentication. **In 1.1, authentication is delegated to a maintained framework.**
+Version 1.0 specified hand-implemented username/password authentication. **In 1.1, authentication was delegated to a maintained framework (Auth.js v5 primary). In 1.3, the primary choice is revised to Better Auth**, based on ecosystem status as of implementation time (August 2026).
 
-- **Primary choice: Auth.js (NextAuth v5).** Rationale: stable since late 2024, the most widely used Next.js auth library, first-class App Router / Server Component / Server Action support, and a mature Prisma adapter. Version 1 uses the **Credentials provider** with username/password.
-- **Approved alternative: Better Auth.** TypeScript-first, self-hosted, manages its own schema, and ships built-in organization/multi-tenant and passkey plugins. Acceptable if its DX or built-in multi-tenant features are preferred; the selection should be confirmed against current maintenance status at implementation time.
+- **Primary choice: Better Auth.** Rationale: TypeScript-first, self-hosted, owns its schema (clean fit with the Prisma-managed core schema and admin-provisioned/no-signup model), and is the option the wider ecosystem — including Auth.js's own maintainers — now steers new projects toward. Version 1 uses its Credentials-style email/username + password flow.
+- **Acceptable alternative: Auth.js (NextAuth v5).** Still production-usable and has the most mature Prisma adapter, but remains beta-labeled well into 2026 with new development effort concentrated on Better Auth. Reasonable to choose only when migrating an existing Auth.js codebase, not for a greenfield build.
 - **Lucia is explicitly excluded** — it was deprecated in March 2025 and is now a learning resource, not a maintained dependency.
 
 **Password handling:** passwords are hashed with a modern, salted, memory-hard algorithm (Argon2id preferred; bcrypt acceptable). The application never stores plaintext passwords and never implements its own password hashing scheme beyond calling a vetted library.
@@ -478,7 +486,7 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 
 ### Authentication, authorization & operations
 
-- **FR-049** — The application shall support multiple authenticated users using a maintained authentication framework (**Auth.js / NextAuth v5**, or Better Auth). Custom, from-scratch session or password logic is prohibited. *(1.1.)*
+- **FR-049** — The application shall support multiple authenticated users using a maintained authentication framework (**Better Auth**, or Auth.js / NextAuth v5). Custom, from-scratch session or password logic is prohibited. *(1.1; primary/alternative swapped in 1.3.)*
 - **FR-050** — Passwords shall be hashed with a vetted, salted, memory-hard algorithm (Argon2id preferred). *(1.1.)*
 - **FR-051** — Authorization shall be enforced server-side in route handlers/service layer and shall not rely solely on Next.js middleware (CVE-2025-29927). Each user shall access **only their own data**; no data (Categories, Items, Modules, Trips, Bags, packing lists) shall be shared with or visible to any other user. *(1.2: sharing removed.)*
 - **FR-052** — User accounts shall be created by an administrator; the application shall not provide self-service signup. The application shall support admin-driven user creation, deactivation, and password reset, and a first-run mechanism to create the initial administrator. *(1.2.)*
