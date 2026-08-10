@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/session";
+
+// Per-user data; must not be statically prerendered at build time.
+export const dynamic = "force-dynamic";
 import { listTrips } from "@/services/tripService";
 
 export default async function Dashboard() {

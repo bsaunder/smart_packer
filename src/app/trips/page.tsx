@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
 import { listTrips } from "@/services/tripService";
+
+// Per-user data; must not be statically prerendered at build time.
+export const dynamic = "force-dynamic";
 import { listModules } from "@/services/moduleService";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

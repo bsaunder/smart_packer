@@ -10,25 +10,27 @@ RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
 WORKDIR /app
+ENV CI=true
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm prisma generate
 RUN pnpm build
 
-# Runtime base includes Chromium + the OS libs Playwright needs for PDF
-# generation (see DESIGN.md "Deployment note"). Keep this tag in sync with
-# the `playwright` package version once it's added as a dependency.
-FROM mcr.microsoft.com/playwright:v1.49.0-noble AS runner
+# PDF export isn't implemented yet (deferred milestone). When it lands,
+# re-evaluate this stage rather than defaulting back to the full
+# mcr.microsoft.com/playwright image (~1.5-2GB, bundles Chromium + Firefox +
+# WebKit) — installing just Chromium via `playwright install --with-deps
+# chromium` on this same slim base is the leaner option, and browser-side
+# print-to-PDF may make server-side rendering unnecessary entirely.
+FROM node:22-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN corepack enable pnpm
 
+# next.config.ts sets output: "standalone", so this is a pre-traced,
+# production-only server bundle (no dev tooling / unused deps).
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/src/generated ./src/generated
 
 EXPOSE 3000
-CMD ["pnpm", "start"]
+CMD ["node", "server.js"]

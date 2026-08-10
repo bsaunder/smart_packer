@@ -1,5 +1,8 @@
 import { getCurrentUser } from "@/lib/session";
 import { listCategories } from "@/services/categoryService";
+
+// Per-user data; must not be statically prerendered at build time.
+export const dynamic = "force-dynamic";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
