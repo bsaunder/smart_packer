@@ -1,11 +1,15 @@
 # Smart Packing Planner — Design & Requirements Document
 
-**Version:** 1.4
-**Supersedes:** 1.3, 1.2, 1.1, 1.0
+**Version:** 1.5
+**Supersedes:** 1.4, 1.3, 1.2, 1.1, 1.0
 
 ---
 
-## Revision Summary (1.3 → 1.4)
+## Revision Summary (1.4 → 1.5)
+
+This revision relaxes one CSV import rule to make incremental imports usable.
+
+1. **A `children` reference may now resolve against an existing Item already in the database, not only a row in the same file.** Previously, every child had to appear as its own row in the same import file, which forced you to re-list unrelated existing Items (e.g. a shared charger) just to add one new item that depends on them. Cycle detection already checked the combined file + existing-data graph, so this doesn't weaken that guarantee — it only widens what counts as a resolved reference. See "Data Import & Export (CSV)" → Import semantics.
 
 This revision adds **CSV export** for master data, mirroring the CSV import format defined in 1.2. It does not change Trip/Bag/print scope.
 
@@ -215,7 +219,7 @@ Camera Batteries,Camera,2,,true,Camera,
 
 - **Two-pass, scoped to the importing user.** Pass 1 upserts every Item (and creates any referenced Categories and Modules) using scalar fields and module memberships. Pass 2 wires parent/child relationships by looking up child names. All rows are processed within a single database transaction.
 - **Upsert by name.** If an Item with the same name already exists for the user, its scalar fields are updated and its module memberships and children are **merged** (union), so re-running an import is safe and additive rather than duplicating data.
-- **Every Item — including every child — must appear as its own row.** A `children` reference to a name that has no row of its own is a validation error; the importer never silently invents an item with no category. (Modules, by contrast, are just names and are auto-created.)
+- **Every child must resolve to a known Item.** A `children` reference must match either another row's `name` in the same file, or an Item that already exists in the database for the importing user (*Revised in 1.5* — previously, file-local rows only). A reference that resolves to neither is a validation error; the importer never silently invents an item with no category. (Modules, by contrast, are just names and are auto-created.)
 - **Parent/child invariant enforced after wiring.** For consistency with FR-009, once relationships are wired, any child of a parent that belongs to a Module is ensured to also belong to that Module. Child quantities are the child's own `default_quantity` and are never derived from the parent (per FR-015a).
 - **Validation & preview.** The importer validates the whole file and presents a row-level report (errors and a summary of what will be created/updated) **before** committing. Detected problems include: missing `name` or `category`, non-integer or non-positive `default_quantity`, an unresolved `children` reference, an Item listed as its own child, and any parent/child **cycle**. If any row fails validation, the import is rejected as a whole (all-or-nothing).
 

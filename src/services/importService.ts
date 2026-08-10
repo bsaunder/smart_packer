@@ -160,24 +160,30 @@ async function buildPreview(ownerId: string, rows: ParsedRow[], parseErrors: Imp
 
   const fileNames = new Set(rows.map((r) => r.name));
 
+  // A `children` reference may resolve against another row in this file or
+  // an Item that already exists in the database for this owner (1.5) — it
+  // no longer has to appear as its own row in every import.
+  const existingItems = await prisma.item.findMany({
+    where: { ownerId },
+    select: { id: true, name: true },
+  });
+  const idToName = new Map(existingItems.map((i) => [i.id, i.name]));
+  const existingNames = new Set(existingItems.map((i) => i.name));
+  const knownNames = new Set([...fileNames, ...existingNames]);
+
   for (const r of rows) {
     if (r.children.includes(r.name)) {
       errors.push({ row: r.row, message: `"${r.name}" cannot be its own child.` });
     }
     for (const child of r.children) {
-      if (!fileNames.has(child)) {
-        errors.push({ row: r.row, message: `child "${child}" has no row of its own in this file.` });
+      if (!knownNames.has(child)) {
+        errors.push({ row: r.row, message: `child "${child}" has no row of its own in this file, and no Item named "${child}" exists yet.` });
       }
     }
   }
 
   // Combine existing DB parent/child edges (by name) with the edges implied
   // by this file, then check the resulting graph for cycles.
-  const existingItems = await prisma.item.findMany({
-    where: { ownerId },
-    select: { id: true, name: true },
-  });
-  const idToName = new Map(existingItems.map((i) => [i.id, i.name]));
   const existingEdges = await prisma.itemParentChild.findMany({
     where: { parentItem: { ownerId } },
     select: { parentItemId: true, childItemId: true },
@@ -196,7 +202,7 @@ async function buildPreview(ownerId: string, rows: ParsedRow[], parseErrors: Imp
   }
   for (const r of rows) {
     for (const child of r.children) {
-      if (fileNames.has(child)) addEdge(r.name, child);
+      if (knownNames.has(child)) addEdge(r.name, child);
     }
   }
 
@@ -209,7 +215,6 @@ async function buildPreview(ownerId: string, rows: ParsedRow[], parseErrors: Imp
     }
   }
 
-  const existingNames = new Set(existingItems.map((i) => i.name));
   const existingCategories = new Set(
     (await prisma.category.findMany({ where: { ownerId }, select: { name: true } })).map((c) => c.name)
   );
@@ -320,10 +325,17 @@ export async function commitImport(ownerId: string, csvText: string): Promise<Im
     }
 
     // Pass 2: wire parent/child relationships (merged/union with existing).
+    // A child may be a row in this file, or an Item that already existed
+    // before this import (1.5) — resolve against both.
+    const existingItemIdByName = new Map<string, string>();
+    for (const item of await tx.item.findMany({ where: { ownerId }, select: { id: true, name: true } })) {
+      existingItemIdByName.set(item.name, item.id);
+    }
+
     for (const r of rows) {
       const parentId = itemIdByName.get(r.name)!;
       for (const childName of r.children) {
-        const childId = itemIdByName.get(childName);
+        const childId = itemIdByName.get(childName) ?? existingItemIdByName.get(childName);
         if (!childId) continue; // unresolved refs were already rejected in validation
         await tx.itemParentChild.upsert({
           where: { parentItemId_childItemId: { parentItemId: parentId, childItemId: childId } },
