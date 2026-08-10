@@ -3,7 +3,10 @@ import { prisma } from "@/lib/prisma";
 export async function listItems(ownerId: string) {
   return prisma.item.findMany({
     where: { ownerId },
-    include: { category: true },
+    include: {
+      category: true,
+      childLinks: { include: { childItem: true } },
+    },
     orderBy: { name: "asc" },
   });
 }
