@@ -49,10 +49,12 @@ model Item {
   notes           String?
   active          Boolean  @default(true)
 
-  moduleItems  ModuleItem[]
-  tripItems    TripItem[]
-  parentLinks  ItemParentChild[] @relation("ParentLinks")
-  childLinks   ItemParentChild[] @relation("ChildLinks")
+  moduleItems ModuleItem[]
+  tripItems   TripItem[]
+  // Rows where this item is the parent; link.childItem is the actual child.
+  childLinks  ItemParentChild[] @relation("ParentToChildren")
+  // Rows where this item is the child; link.parentItem is the actual parent.
+  parentLinks ItemParentChild[] @relation("ChildToParents")
 
   @@unique([ownerId, name])
   @@index([ownerId])
@@ -62,9 +64,9 @@ model Item {
 // Parent -> children direction, matching DESIGN.md's CSV `children` column.
 model ItemParentChild {
   parentItemId String
-  parentItem   Item   @relation("ParentLinks", fields: [parentItemId], references: [id], onDelete: Cascade)
+  parentItem   Item   @relation("ParentToChildren", fields: [parentItemId], references: [id], onDelete: Cascade)
   childItemId  String
-  childItem    Item   @relation("ChildLinks", fields: [childItemId], references: [id], onDelete: Cascade)
+  childItem    Item   @relation("ChildToParents", fields: [childItemId], references: [id], onDelete: Cascade)
 
   @@id([parentItemId, childItemId])
   @@index([childItemId])
