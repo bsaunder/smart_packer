@@ -1,7 +1,17 @@
 # Smart Packing Planner — Design & Requirements Document
 
-**Version:** 1.3
-**Supersedes:** 1.2, 1.1, 1.0
+**Version:** 1.4
+**Supersedes:** 1.3, 1.2, 1.1, 1.0
+
+---
+
+## Revision Summary (1.3 → 1.4)
+
+This revision adds **CSV export** for master data, mirroring the CSV import format defined in 1.2. It does not change Trip/Bag/print scope.
+
+1. **Master data (Categories, Items — including parent/child relationships and quantities —, and Modules with membership) can now be exported** to the same one-row-per-Item CSV shape used for import, so the two are round-trippable: export, edit offline, re-import (upsert-by-name) is a supported workflow. See "Data Import & Export (CSV)".
+2. **Trip/PDF export scope is unchanged.** The only export for Trip data (packing lists) remains the PDF checklist; Trips, Trip Items, Bags, and packing status are still never imported *or* exported via CSV — they stay runtime data generated from master data. FR-028a is revised to state this precisely instead of blanket-excluding all export.
+3. New **FR-057** covers the export requirement; new **UC-019** covers the export flow.
 
 ---
 
@@ -129,7 +139,7 @@ Each generated Trip Item supports: Quantity Override, Packed, Removed from Trip,
 - **Modules:** Create reusable packing modules.
 - **Categories:** Manage category names and display order.
 - **Trip History:** Duplicate trip, review packing list, compare trips.
-- **Settings:** Theme, Backup, CSV Import (see Data Import). *(Export in Version 1 is limited to PDF checklists; structured export is deferred to the future REST API.)*
+- **Settings:** Theme, Backup, CSV Import & Export of master data (see Data Import & Export). *(Trip-level export in Version 1 is limited to PDF checklists; structured Trip export is deferred to the future REST API.)*
 
 ---
 
@@ -157,13 +167,13 @@ Users can generate a printer-friendly packing checklist from any Trip, exportabl
 
 **PDF metadata:** Trip Name, Destination, Author, Creation Date, Application Version.
 
-> **Data export scope (1.2):** Version 1 has no bulk data export. Output is limited to the **PDF checklist**; structured data export is deferred to the **future REST API**. There is therefore no CSV *export* — CSV is an import-only format.
+> **Data export scope (Revised in 1.4):** Trip-level export remains PDF-only — there is no bulk export of Trip/Trip Item/Bag/packing-status data, and none is planned short of the future REST API. **Master data** (Categories, Items, Modules), however, now has a CSV export mirroring the import format — see "Data Import & Export (CSV)".
 
 ---
 
-## Data Import (CSV) (New in 1.2)
+## Data Import & Export (CSV) (Import: new in 1.2; Export: new in 1.4)
 
-Version 1 supports **CSV import** so users can migrate an existing packing list (typically a spreadsheet) into the application. Import populates the reusable master data — **Categories, Items (with parent/child relationships), and Modules (with membership)**. Trips and Bags are *not* imported; Trips are generated from Modules and Bags are created per Trip.
+Version 1 supports **CSV import and export** of the reusable master data — **Categories, Items (with parent/child relationships), and Modules (with membership)**. Import lets users migrate an existing packing list (typically a spreadsheet) into the application; export produces the same shape back out, so the two round-trip (export → edit offline → re-import, safe because import upserts by name). Trips and Bags are *not* imported or exported via CSV in either direction; Trips are generated from Modules and Bags are created per Trip — both remain runtime data.
 
 ### Why one denormalized file
 
@@ -209,9 +219,16 @@ Camera Batteries,Camera,2,,true,Camera,
 - **Parent/child invariant enforced after wiring.** For consistency with FR-009, once relationships are wired, any child of a parent that belongs to a Module is ensured to also belong to that Module. Child quantities are the child's own `default_quantity` and are never derived from the parent (per FR-015a).
 - **Validation & preview.** The importer validates the whole file and presents a row-level report (errors and a summary of what will be created/updated) **before** committing. Detected problems include: missing `name` or `category`, non-integer or non-positive `default_quantity`, an unresolved `children` reference, an Item listed as its own child, and any parent/child **cycle**. If any row fails validation, the import is rejected as a whole (all-or-nothing).
 
-### Not imported
+### Export (New in 1.4)
 
-Trips, Trip Items, Bags, packing status, and per-trip overrides are never imported — they are runtime data generated from the master data above.
+- **Same shape as import.** Export produces one row per Item, with the identical `name,category,default_quantity,notes,active,modules,children` columns, RFC 4180 quoting, and pipe-delimited multi-value cells. A file exported from the app and re-imported unchanged is a no-op update (every field matches what's already there).
+- **Scope: all of the user's Items**, active and inactive, regardless of Module or Trip usage. `category` is the Category name; `modules` lists every Module the Item currently belongs to; `children` lists the Item's direct children by name (one level — a grandchild appears on its own parent's row, not repeated on the ancestor's row, matching how import interprets `children`).
+- **Not exported.** Category display order and Module-level metadata beyond membership are not separately represented in this format (Categories/Modules only exist in the export as names referenced from Item rows, same as on import). Trips, Trip Items, Bags, packing status, and per-trip overrides are never exported — see "Not imported/exported" below.
+- **Delivery.** A direct file download from Settings (`GET`, `Content-Type: text/csv`, `Content-Disposition: attachment`) — no background job or email delivery for Version 1.
+
+### Not imported/exported
+
+Trips, Trip Items, Bags, packing status, and per-trip overrides are never imported or exported via CSV — they are runtime data generated from the master data above. The only Trip-level output is the PDF checklist (see Print & Export).
 
 ---
 
@@ -289,6 +306,7 @@ PostgreSQL
 - **PdfExportService:** render trip data to HTML, invoke Playwright to produce PDF, apply layout/theme options and metadata.
 - **BagService:** create bags for trips, assign items to bags, move items between bags.
 - **ImportService:** parse and validate the Items CSV, preview results, and commit the two-pass import (upsert Items, auto-create Categories/Modules, wire parent/child, enforce the module child invariant) within a single transaction, scoped to the importing user.
+- **ExportService:** read a user's Categories, Items (with parent/child links), and Modules (with membership) and serialize them to the same Items CSV shape used for import, scoped to the exporting user. *(1.4.)*
 - **UserService:** admin-driven user creation, deactivation, and password reset; profile management (delegating credential handling to the auth framework — see below). No self-service signup.
 
 ### REST API readiness
@@ -459,7 +477,7 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 
 - **FR-027** — The application shall generate a printable packing checklist for any Trip.
 - **FR-028** — The printable checklist shall support export to PDF.
-- **FR-028a** — Version 1 shall provide no bulk structured data export; the only export is the PDF checklist, with structured export deferred to the future REST API. *(1.2.)*
+- **FR-028a** — Version 1 shall provide no bulk export of Trip-level data (Trips, Trip Items, Bags, packing status); the only Trip-level export is the PDF checklist, with structured Trip export deferred to the future REST API. Master data (Categories, Items, Modules) has a CSV export per FR-057. *(1.2; scope narrowed to Trip-level data in 1.4.)*
 - **FR-029** — The default printable layout shall use a two-column page layout to minimize paper usage. *(1.1: implemented with CSS multi-column, not a custom height-calculation engine.)*
 - **FR-030** — Items shall remain grouped by Category unless the user selects an alternate print format.
 - **FR-031** — Users shall be able to optionally include Bag Assignments, Notes, and Quantities in the printed checklist.
@@ -494,6 +512,7 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 - **FR-054** — CSV import shall auto-create referenced Categories and Modules by name, upsert Items by name (merging module memberships and children on re-import), and process the file within a single transaction scoped to the importing user. *(1.2.)*
 - **FR-055** — CSV import shall validate the entire file and present a row-level preview before committing, rejecting the import as a whole if any row fails validation (including unresolved child references, invalid quantities, and parent/child cycles). *(1.2.)*
 - **FR-056** — The application shall support backup and restoration using PostgreSQL backup utilities and Docker volume backup.
+- **FR-057** — The application shall support exporting master data (Categories, Items — including parent/child relationships and default quantities —, and Modules with membership) to the CSV format defined in Data Import & Export (CSV), for backup and migration purposes. *(1.4.)*
 
 ---
 
@@ -606,6 +625,12 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 **Actor:** External Application.
 **Flow:** Client calls `POST /api/trips/{id}/generate` → Route Handler validates and authorizes the request → invokes `TripService.generatePackingList()` → the same business logic runs → the packing list is returned as JSON.
 **Result:** REST API and web application share identical business rules and consistent behavior.
+
+### UC-019 — Export Master Data to CSV
+**Actor:** User. **Scenario:** The user wants an offline backup, or wants to bulk-edit their catalog in a spreadsheet and re-import it.
+**Flow:** Settings → CSV Export → download.
+**System response:** `ExportService` reads the user's Categories, Items (with parent/child links), and Modules (with membership) and writes them to the same one-row-per-Item CSV shape used for import.
+**Result:** A CSV file suitable for backup, offline editing, or migrating master data to another instance; re-importing it unchanged is a no-op.
 
 ---
 
