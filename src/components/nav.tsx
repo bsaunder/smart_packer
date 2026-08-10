@@ -6,6 +6,7 @@ const links = [
   { href: "/items", label: "Items" },
   { href: "/modules", label: "Modules" },
   { href: "/trips", label: "Trips" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function Nav() {
