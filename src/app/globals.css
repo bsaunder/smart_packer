@@ -128,3 +128,36 @@
     @apply font-sans;
   }
 }
+
+/* Never print the app chrome, on any page. */
+@media print {
+  nav {
+    display: none;
+  }
+}
+
+/* Print checklist layout (DESIGN.md "Printable Layout — Rendering Approach"). */
+.print-checklist {
+  column-count: 2;
+  column-gap: 1.2cm;
+  column-fill: auto;
+}
+.print-category {
+  break-inside: avoid;
+  margin-bottom: 0.9em;
+}
+.print-item {
+  break-inside: avoid;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+}
+
+@media print {
+  @page {
+    margin: 1.4cm 1.2cm;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

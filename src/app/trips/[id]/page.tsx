@@ -32,6 +32,14 @@ import {
   createBagAction,
   deleteBagAction,
 } from "./actions";
+import {
+  allCategoriesOf,
+  buildViewLink,
+  groupTripItems,
+  parseViewParams,
+  visibleTripItems,
+  type ViewParams,
+} from "@/lib/packingListView";
 
 const UNASSIGNED = "unassigned";
 
@@ -40,15 +48,12 @@ export default async function TripDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ view?: string; filter?: string; scope?: string }>;
+  searchParams: Promise<ViewParams>;
 }) {
   const { id } = await params;
-  const { view: rawView, filter: rawFilter, scope: rawScope } = await searchParams;
-  const view = rawView === "bag" ? "bag" : "category";
-  const filter = rawFilter === "packed" || rawFilter === "unpacked" ? rawFilter : "all";
-  const scope = rawScope || "all";
-  const scopeType = scope.startsWith("category:") ? "category" : scope.startsWith("bag:") ? "bag" : "all";
-  const scopeValue = scopeType === "all" ? null : scope.slice(scope.indexOf(":") + 1);
+  const rawParams = await searchParams;
+  const parsed = parseViewParams(rawParams);
+  const { view, filter, scope, scopeType, scopeValue } = parsed;
 
   const user = await getCurrentUser();
   const [trip, modules] = await Promise.all([
@@ -58,55 +63,27 @@ export default async function TripDetailPage({
 
   if (!trip) notFound();
 
-  const nonRemovedItems = trip.tripItems.filter((ti) => !ti.removed);
-  const allCategories = [...new Set(nonRemovedItems.map((ti) => ti.category))].sort();
+  const allCategories = allCategoriesOf(trip);
+  const groups = groupTripItems(visibleTripItems(trip, parsed), view);
+  const basePath = `/trips/${trip.id}`;
 
-  let visibleItems = nonRemovedItems;
-  if (filter === "packed") visibleItems = visibleItems.filter((ti) => ti.packed);
-  if (filter === "unpacked") visibleItems = visibleItems.filter((ti) => !ti.packed);
-  if (scopeType === "category") visibleItems = visibleItems.filter((ti) => ti.category === scopeValue);
-  if (scopeType === "bag") {
-    visibleItems =
-      scopeValue === "unassigned"
-        ? visibleItems.filter((ti) => !ti.bagId)
-        : visibleItems.filter((ti) => ti.bagId === scopeValue);
-  }
-
-  const groups = new Map<string, typeof visibleItems>();
-  if (view === "bag") {
-    for (const item of visibleItems) {
-      const key = item.bag?.name ?? "Unassigned";
-      groups.set(key, [...(groups.get(key) ?? []), item]);
-    }
-  } else {
-    for (const item of visibleItems) {
-      groups.set(item.category, [...(groups.get(item.category) ?? []), item]);
-    }
-  }
-
-  function buildLink(overrides: { view?: string; filter?: string; scope?: string }) {
-    const v = overrides.view ?? view;
-    const f = overrides.filter ?? filter;
-    const s = overrides.scope ?? scope;
-    const params = new URLSearchParams();
-    if (v !== "category") params.set("view", v);
-    if (f !== "all") params.set("filter", f);
-    if (s !== "all") params.set("scope", s);
-    const qs = params.toString();
-    return `/trips/${trip!.id}${qs ? `?${qs}` : ""}`;
-  }
-
-  const viewLink = (v: string) => buildLink({ view: v });
-  const filterLink = (f: string) => buildLink({ filter: f });
-  const scopeLink = (s: string) => buildLink({ scope: s });
+  const viewLink = (v: string) => buildViewLink(basePath, parsed, { view: v });
+  const filterLink = (f: string) => buildViewLink(basePath, parsed, { filter: f });
+  const scopeLink = (s: string) => buildViewLink(basePath, parsed, { scope: s });
+  const printLink = buildViewLink(`${basePath}/print`, parsed, {});
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{trip.name}</h1>
-        {trip.destination && (
-          <p className="text-muted-foreground">{trip.destination}</p>
-        )}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">{trip.name}</h1>
+          {trip.destination && (
+            <p className="text-muted-foreground">{trip.destination}</p>
+          )}
+        </div>
+        <Button asChild variant="outline">
+          <Link href={printLink}>Print</Link>
+        </Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
