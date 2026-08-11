@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { getTrip } from "@/services/tripService";
@@ -6,6 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -20,14 +28,25 @@ import {
   removeItemAction,
   addCustomItemAction,
   addModulesToTripAction,
+  assignBagAction,
+  createBagAction,
+  deleteBagAction,
 } from "./actions";
+
+const UNASSIGNED = "unassigned";
 
 export default async function TripDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string; filter?: string }>;
 }) {
   const { id } = await params;
+  const { view: rawView, filter: rawFilter } = await searchParams;
+  const view = rawView === "bag" ? "bag" : "category";
+  const filter = rawFilter === "packed" || rawFilter === "unpacked" ? rawFilter : "all";
+
   const user = await getCurrentUser();
   const [trip, modules] = await Promise.all([
     getTrip(user.id, id),
@@ -36,12 +55,36 @@ export default async function TripDetailPage({
 
   if (!trip) notFound();
 
-  const activeItems = trip.tripItems.filter((ti) => !ti.removed);
-  const byCategory = new Map<string, typeof activeItems>();
-  for (const item of activeItems) {
-    const list = byCategory.get(item.category) ?? [];
-    list.push(item);
-    byCategory.set(item.category, list);
+  let visibleItems = trip.tripItems.filter((ti) => !ti.removed);
+  if (filter === "packed") visibleItems = visibleItems.filter((ti) => ti.packed);
+  if (filter === "unpacked") visibleItems = visibleItems.filter((ti) => !ti.packed);
+
+  const groups = new Map<string, typeof visibleItems>();
+  if (view === "bag") {
+    for (const item of visibleItems) {
+      const key = item.bag?.name ?? "Unassigned";
+      groups.set(key, [...(groups.get(key) ?? []), item]);
+    }
+  } else {
+    for (const item of visibleItems) {
+      groups.set(item.category, [...(groups.get(item.category) ?? []), item]);
+    }
+  }
+
+  function viewLink(v: string) {
+    const params = new URLSearchParams();
+    if (v !== "category") params.set("view", v);
+    if (filter !== "all") params.set("filter", filter);
+    const qs = params.toString();
+    return `/trips/${trip!.id}${qs ? `?${qs}` : ""}`;
+  }
+
+  function filterLink(f: string) {
+    const params = new URLSearchParams();
+    if (view !== "category") params.set("view", view);
+    if (f !== "all") params.set("filter", f);
+    const qs = params.toString();
+    return `/trips/${trip!.id}${qs ? `?${qs}` : ""}`;
   }
 
   return (
@@ -53,27 +96,52 @@ export default async function TripDetailPage({
         )}
       </div>
 
-      {byCategory.size === 0 ? (
+      <div className="flex flex-wrap items-center gap-4 text-sm">
+        <div className="flex gap-2">
+          <span className="text-muted-foreground">View:</span>
+          <Link href={viewLink("category")} className={view === "category" ? "font-medium" : "text-muted-foreground"}>
+            By Category
+          </Link>
+          <Link href={viewLink("bag")} className={view === "bag" ? "font-medium" : "text-muted-foreground"}>
+            By Bag
+          </Link>
+        </div>
+        <div className="flex gap-2">
+          <span className="text-muted-foreground">Filter:</span>
+          <Link href={filterLink("all")} className={filter === "all" ? "font-medium" : "text-muted-foreground"}>
+            All
+          </Link>
+          <Link href={filterLink("packed")} className={filter === "packed" ? "font-medium" : "text-muted-foreground"}>
+            Packed
+          </Link>
+          <Link href={filterLink("unpacked")} className={filter === "unpacked" ? "font-medium" : "text-muted-foreground"}>
+            Unpacked
+          </Link>
+        </div>
+      </div>
+
+      {groups.size === 0 ? (
         <p className="text-muted-foreground">
-          No items yet — generate this trip from a module, or add a custom
-          item below.
+          No items match — generate this trip from a module, add a custom
+          item below, or adjust the filter above.
         </p>
       ) : (
-        [...byCategory.entries()].map(([category, categoryItems]) => (
-          <div key={category} className="flex flex-col gap-2">
-            <h2 className="text-lg font-medium">{category}</h2>
+        [...groups.entries()].map(([groupName, groupItems]) => (
+          <div key={groupName} className="flex flex-col gap-2">
+            <h2 className="text-lg font-medium">{groupName}</h2>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">Packed</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead className="w-32">Quantity</TableHead>
+                  <TableHead className="w-40">Bag</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead className="w-20" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {categoryItems.map((item) => {
+                {groupItems.map((item) => {
                   const quantity = item.quantityOverride ?? item.quantity;
                   return (
                     <TableRow key={item.id}>
@@ -110,6 +178,28 @@ export default async function TripDetailPage({
                             defaultValue={quantity}
                             className="h-8 w-16"
                           />
+                          <Button type="submit" size="sm" variant="ghost">
+                            Set
+                          </Button>
+                        </form>
+                      </TableCell>
+                      <TableCell>
+                        <form action={assignBagAction} className="flex items-center gap-2">
+                          <input type="hidden" name="tripItemId" value={item.id} />
+                          <input type="hidden" name="tripId" value={trip.id} />
+                          <Select name="bagId" defaultValue={item.bagId ?? UNASSIGNED}>
+                            <SelectTrigger className="h-8 w-32">
+                              <SelectValue placeholder="Unassigned" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                              {trip.bags.map((bag) => (
+                                <SelectItem key={bag.id} value={bag.id}>
+                                  {bag.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <Button type="submit" size="sm" variant="ghost">
                             Set
                           </Button>
@@ -172,6 +262,52 @@ export default async function TripDetailPage({
             </Button>
           </form>
         )}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-lg border p-4">
+        <h3 className="font-medium">Bags</h3>
+        {trip.bags.length > 0 && (
+          <ul className="flex flex-col gap-1 text-sm">
+            {trip.bags.map((bag) => (
+              <li key={bag.id} className="flex items-center gap-3">
+                <span>
+                  {bag.name}
+                  {bag.bagType ? ` (${bag.bagType})` : ""}
+                  {bag.weightLimit ? ` — limit ${bag.weightLimit}` : ""}
+                </span>
+                <form action={deleteBagAction}>
+                  <input type="hidden" name="bagId" value={bag.id} />
+                  <input type="hidden" name="tripId" value={trip.id} />
+                  <Button type="submit" size="sm" variant="ghost">
+                    Delete
+                  </Button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={createBagAction} className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="tripId" value={trip.id} />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bagName">Name</Label>
+            <Input id="bagName" name="name" placeholder="e.g. Checked Suitcase" required className="w-48" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bagType">Type</Label>
+            <Input id="bagType" name="bagType" placeholder="optional" className="w-32" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bagColor">Color</Label>
+            <Input id="bagColor" name="color" placeholder="optional" className="w-24" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="weightLimit">Weight limit</Label>
+            <Input id="weightLimit" name="weightLimit" type="number" min={0} step="0.1" placeholder="optional" className="w-28" />
+          </div>
+          <Button type="submit" variant="secondary">
+            Add bag
+          </Button>
+        </form>
       </div>
     </div>
   );

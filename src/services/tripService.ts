@@ -162,6 +162,33 @@ export async function setTripItemPacked(
   });
 }
 
+/**
+ * Assigns (or clears, with bagId null) a Trip Item's Bag. Bags are always
+ * scoped to the same Trip as the item (FR-022, FR-023); packing status is
+ * untouched (FR-025).
+ */
+export async function setTripItemBag(
+  ownerId: string,
+  tripItemId: string,
+  bagId: string | null
+) {
+  const tripItem = await prisma.tripItem.findFirst({
+    where: { id: tripItemId, trip: { ownerId } },
+    select: { tripId: true },
+  });
+  if (!tripItem) throw new Error("Trip item not found for this owner.");
+
+  if (bagId) {
+    const bag = await prisma.bag.findFirst({ where: { id: bagId, tripId: tripItem.tripId } });
+    if (!bag) throw new Error("Bag not found for this trip.");
+  }
+
+  return prisma.tripItem.update({
+    where: { id: tripItemId },
+    data: { bagId },
+  });
+}
+
 /** Removes an item from a single Trip only (FR-018); master data is untouched. */
 export async function removeTripItem(ownerId: string, tripItemId: string) {
   await assertOwnsTripItem(ownerId, tripItemId);

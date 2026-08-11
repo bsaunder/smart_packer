@@ -6,9 +6,11 @@ import {
   addCustomTripItem,
   addModulesToTrip,
   removeTripItem,
+  setTripItemBag,
   setTripItemPacked,
   setTripItemQuantity,
 } from "@/services/tripService";
+import { createBag, deleteBag } from "@/services/bagService";
 
 export async function togglePackedAction(formData: FormData) {
   const user = await getCurrentUser();
@@ -61,5 +63,44 @@ export async function addModulesToTripAction(formData: FormData) {
   if (!tripId || moduleIds.length === 0) return;
 
   await addModulesToTrip(user.id, tripId, moduleIds);
+  revalidatePath(`/trips/${tripId}`);
+}
+
+export async function assignBagAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const tripItemId = String(formData.get("tripItemId") ?? "");
+  const tripId = String(formData.get("tripId") ?? "");
+  const bagId = String(formData.get("bagId") ?? "");
+  if (!tripItemId) return;
+
+  await setTripItemBag(user.id, tripItemId, bagId && bagId !== "unassigned" ? bagId : null);
+  revalidatePath(`/trips/${tripId}`);
+}
+
+export async function createBagAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const tripId = String(formData.get("tripId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const bagType = String(formData.get("bagType") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
+  const rawWeightLimit = String(formData.get("weightLimit") ?? "").trim();
+  if (!tripId || !name) return;
+
+  await createBag(user.id, tripId, {
+    name,
+    bagType: bagType || undefined,
+    color: color || undefined,
+    weightLimit: rawWeightLimit ? Number(rawWeightLimit) : undefined,
+  });
+  revalidatePath(`/trips/${tripId}`);
+}
+
+export async function deleteBagAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const bagId = String(formData.get("bagId") ?? "");
+  const tripId = String(formData.get("tripId") ?? "");
+  if (!bagId) return;
+
+  await deleteBag(user.id, bagId);
   revalidatePath(`/trips/${tripId}`);
 }
