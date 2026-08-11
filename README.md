@@ -4,14 +4,48 @@ Smart Packing List Generator. See [DESIGN.md](./DESIGN.md) for the full design a
 
 ## Getting Started
 
-Requires Node 22+ and pnpm.
+Requires Node 22+, pnpm, and Docker (for PostgreSQL). `pnpm dev` only starts the Next.js dev server — it does **not** start Postgres, so the app will fail to load any page until a database is running and migrated.
+
+### 1. Configure environment variables
+
+```bash
+cp .env.example .env
+```
+
+The defaults in `.env.example` already match the Postgres credentials in `docker-compose.yml`, so no edits are required for local development.
+
+### 2. Start Postgres
+
+```bash
+docker compose up -d db
+```
+
+This starts only the database container (not the app), on `localhost:5432`, with a persistent named volume so your data survives restarts. Leave it running in the background — `docker compose down` stops and removes the container (data is preserved in the volume); `docker compose ps` shows whether it's up.
+
+### 3. Install dependencies, migrate, and seed
 
 ```bash
 pnpm install
+pnpm db:migrate       # applies prisma/migrations against the running db
+pnpm db:seed          # creates the ADMIN_USERNAME/ADMIN_PASSWORD dev user from .env
+```
+
+`db:seed` is what the app currently authenticates as — there's no real login yet (see DESIGN.md's Authentication section for the planned Better Auth work); every page acts as this one seeded user.
+
+### 4. Run the dev server
+
+```bash
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Steps 2–3 only need to be repeated when you reset the database; day-to-day you just need `docker compose up -d db` running and `pnpm dev`.
+
+### Alternative: run the whole stack in Docker
+
+`docker compose up --build` builds and starts both the `app` and `db` containers (this is closer to how DESIGN.md's self-hosted deployment works, and is what `Dockerfile`/`docker-compose.yml` are for). Two things to know:
+
+- The `app` container's image is intentionally slim (Next.js standalone output — see DESIGN.md's Deployment note) and does **not** include the Prisma CLI, so it can't run migrations or the seed script itself. Run `pnpm db:migrate:deploy` and `pnpm db:seed` from your host machine (against the same `localhost:5432` Postgres exposed by the `db` container) before or after bringing the stack up.
+- `AUTH_SECRET` and `ADMIN_PASSWORD` are required — `docker compose up` will fail fast with a clear error if they're not set in `.env`.
 
 Built with [Next.js](https://nextjs.org) (App Router), TypeScript, Tailwind CSS, shadcn/ui, Prisma, and PostgreSQL. See DESIGN.md for the full architecture.
 
@@ -35,7 +69,7 @@ Master data — Categories, Items (including parent/child relationships and defa
 | `notes` | No | Free-text notes. |
 | `active` | No | `true` / `false`. Defaults to `true`. |
 | `modules` | No | Pipe-delimited Module names this Item belongs to. Modules are created automatically. |
-| `children` | No | Pipe-delimited **Item names** that are children of this Item (parent → children). Every child must have its own row in the same file — a reference to a name with no row is a validation error. |
+| `children` | No | Pipe-delimited **Item names** that are children of this Item (parent → children). Each name must match either another row's `name` in this file or an Item that already exists in your database — a reference to neither is a validation error. |
 
 ### Import semantics
 
