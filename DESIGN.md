@@ -1,7 +1,17 @@
 # Smart Packing Planner — Design & Requirements Document
 
-**Version:** 1.6
-**Supersedes:** 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+**Version:** 1.7
+**Supersedes:** 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+
+---
+
+## Revision Summary (1.6 → 1.7)
+
+This revision makes the Docker Compose deployment fully self-contained: **no manual `pnpm`/Prisma CLI commands are required to deploy or upgrade.** Previously (and as originally implemented in 1.1–1.6), applying migrations and seeding the first-run admin were manual steps run from a host machine with the project's dependencies installed — workable for local development, but not for a "hand someone a compose file and they run it" deployment (e.g. a Docker management UI like Dockge, which only runs `docker compose up`).
+
+1. **A `migrate` service runs automatically before `app` starts**, applying pending Prisma migrations and performing the first-run admin seed (Account provisioning's "First-run bootstrap"), then exits; `app` waits for it to complete successfully (`depends_on: condition: service_completed_successfully`). A plain `docker compose up` now fully deploys and upgrades the application, end to end.
+2. **The application image is built from two targets** in the same `Dockerfile`: `app` (the persistent, always-running service — Next.js standalone output only, no Prisma CLI) and `migrate` (a one-shot init container carrying the Prisma CLI + seed script, which the always-running `app` image does not need). This keeps `app`'s image small — the `prisma` CLI package alone pulls in Prisma Studio, its embedded dev database, and an MCP SDK (several hundred MB the app itself never touches), which is fine to pay once in a container that runs for seconds and exits, but not worth carrying in the container that runs continuously.
+3. **Migrations and seeding are idempotent by design**, unchanged from 1.2/1.6: `prisma migrate deploy` only applies pending migrations, and the seed script only creates the initial admin if zero users exist — so `migrate` running on every `docker compose up` (including restarts and upgrades) is safe.
 
 ---
 
@@ -411,16 +421,22 @@ The application supports multiple users, but **all data is fully isolated per us
 
 - **Users are admin-created.** There is no open self-service signup.
 - The application supports an **administrative capability** to create users, deactivate users, and reset passwords. This may be exposed as a minimal admin UI, a CLI/management script, or both.
-- **First-run bootstrap:** the deployment must provide a way to create the initial administrator — for example, seeding an admin account from environment variables (`ADMIN_USERNAME` / `ADMIN_PASSWORD`) on first startup, applied only if no users exist.
+- **First-run bootstrap:** the deployment automatically creates the initial administrator by seeding an admin account from environment variables (`ADMIN_USERNAME` / `ADMIN_PASSWORD`) on first startup, applied only if no users exist. *(Revised in 1.7 — this now runs unattended as part of `docker compose up`, via the `migrate` service; see Deployment.)*
 - **Password reset without email:** because no mail server is specified for Version 1, password reset is **admin-driven** — an administrator sets a new password (or a one-time password the user must change on next login). Self-service email-based reset is a future enhancement.
 
 ### Persistent storage
 
 All application data is stored exclusively in PostgreSQL. Browser storage is not used for application persistence. Cookies are used only for authenticated sessions.
 
-### Deployment
+### Deployment (Revised in 1.7)
 
-Deployment uses Docker Compose. Required containers: Smart Packing Planner and PostgreSQL. Persistent Docker volumes store PostgreSQL data, and application upgrades do not affect stored user data.
+Deployment uses Docker Compose with three services, defined in one `docker-compose.yml` against one `Dockerfile` (two build targets — see Revision Summary 1.6 → 1.7):
+
+- **`db`** — PostgreSQL, with a persistent named volume so upgrades and restarts never lose data.
+- **`migrate`** — a one-shot container that applies pending Prisma migrations and performs first-run admin seeding, then exits. Runs automatically before `app` starts.
+- **`app`** — the persistent Next.js service. Waits for `migrate` to succeed before starting.
+
+`docker compose up` is a complete deploy or upgrade with no separate commands to run by hand — this was the explicit goal of the 1.7 revision (a compose file handed to a Docker management tool like Dockge must work standalone, with no host machine that has the project's own dependencies installed).
 
 > **Deployment note (superseded in 1.6):** 1.1 required bundling Playwright's Chromium dependencies into the application image (the official Playwright base image alone runs ~1.5-2GB, since it bundles Chromium, Firefox, and WebKit). **1.6 removes this entirely** — there is no headless browser in the image, and no Chromium-related deployment consideration at all.
 
@@ -610,8 +626,8 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 
 ### UC-014 — Deploy the Application
 **Actor:** Administrator.
-**Flow:** Install Docker and Docker Compose → clone the repository → configure environment variables (including initial `ADMIN_USERNAME` / `ADMIN_PASSWORD`) → `docker compose up -d`.
-**System response:** On first startup with no existing users, the application seeds the initial administrator account from the provided environment variables.
+**Flow:** Install Docker and Docker Compose → clone the repository (or just copy `docker-compose.yml`) → configure environment variables (including initial `ADMIN_USERNAME` / `ADMIN_PASSWORD`) → `docker compose up -d`.
+**System response:** The `migrate` service applies the database schema and, on first startup with no existing users, seeds the initial administrator account from the provided environment variables — automatically, before `app` starts (1.7). No separate commands are run by the administrator.
 **Result:** The application and PostgreSQL are deployed with persistent storage and an administrator account ready for use.
 
 ### UC-015 — Authenticate User

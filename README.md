@@ -40,12 +40,22 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000). Steps 2–3 only need to be repeated when you reset the database; day-to-day you just need `docker compose up -d db` running and `pnpm dev`.
 
-### Alternative: run the whole stack in Docker
+### Alternative: run the whole stack in Docker (production / self-hosted deployment)
 
-`docker compose up --build` builds and starts both the `app` and `db` containers (this is closer to how DESIGN.md's self-hosted deployment works, and is what `Dockerfile`/`docker-compose.yml` are for). Two things to know:
+```bash
+cp .env.example .env   # edit AUTH_SECRET / ADMIN_PASSWORD first
+docker compose up -d
+```
 
-- The `app` container's image is intentionally slim (Next.js standalone output — see DESIGN.md's Deployment note) and does **not** include the Prisma CLI, so it can't run migrations or the seed script itself. Run `pnpm db:migrate:deploy` and `pnpm db:seed` from your host machine (against the same `localhost:5432` Postgres exposed by the `db` container) before or after bringing the stack up.
-- `AUTH_SECRET` and `ADMIN_PASSWORD` are required — `docker compose up` will fail fast with a clear error if they're not set in `.env`.
+This is the deployment path — a compose file, no host `pnpm`/Node/Prisma CLI required, no separate migrate/seed commands to run by hand. It starts three services:
+
+- **`db`** — PostgreSQL with a persistent named volume.
+- **`migrate`** — a one-shot container that applies pending Prisma migrations and seeds the initial admin user (only if no users exist yet), then exits. Runs automatically before `app` starts, including on every future `docker compose up` after a `git pull` that adds new migrations — upgrades are just "pull, then `docker compose up -d --build` again."
+- **`app`** — the persistent Next.js server. Waits for `migrate` to finish successfully first.
+
+`AUTH_SECRET` and `ADMIN_PASSWORD` are required — `docker compose up` fails fast with a clear error if they're not set in `.env`. `docker compose logs migrate` shows what the migration/seed step did on the most recent startup.
+
+Note on image size: the `migrate` image is intentionally larger than `app` (it bundles the full Prisma CLI, which pulls in Prisma Studio and other tooling the app itself never uses) — this is fine since it only runs briefly and exits; it's not part of the app's continuous runtime footprint. `app`'s image stays small (Next.js standalone output, no Prisma CLI) since that's the one actually running all the time. See DESIGN.md's Deployment section for the full rationale.
 
 Built with [Next.js](https://nextjs.org) (App Router), TypeScript, Tailwind CSS, shadcn/ui, Prisma, and PostgreSQL. See DESIGN.md for the full architecture.
 

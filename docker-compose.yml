@@ -16,14 +16,33 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot: applies pending Prisma migrations and seeds the initial admin
+  # user (first run only), then exits. `app` waits for this to succeed
+  # before starting, so a plain `docker compose up` is a complete deploy —
+  # no separate migrate/seed commands need to be run by hand.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://packer:packer@db:5432/smart_packer?schema=public
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
+      target: app
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://packer:packer@db:5432/smart_packer?schema=public
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
