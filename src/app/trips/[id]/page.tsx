@@ -209,7 +209,11 @@ export default async function TripDetailPage({
                         <form action={assignBagAction} className="flex items-center gap-2">
                           <input type="hidden" name="tripItemId" value={item.id} />
                           <input type="hidden" name="tripId" value={trip.id} />
-                          <Select name="bagId" defaultValue={item.bagId ?? UNASSIGNED}>
+                          <Select
+                            key={item.bagId ?? UNASSIGNED}
+                            name="bagId"
+                            defaultValue={item.bagId ?? UNASSIGNED}
+                          >
                             <SelectTrigger className="h-8 w-32">
                               <SelectValue placeholder="Unassigned" />
                             </SelectTrigger>
