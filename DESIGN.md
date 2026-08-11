@@ -1,7 +1,18 @@
 # Smart Packing Planner — Design & Requirements Document
 
-**Version:** 1.5
-**Supersedes:** 1.4, 1.3, 1.2, 1.1, 1.0
+**Version:** 1.6
+**Supersedes:** 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+
+---
+
+## Revision Summary (1.5 → 1.6)
+
+This revision **removes server-side PDF generation (Playwright/headless Chromium) entirely**, replacing it with a browser-printable checklist view. Product behavior (two-column paper-saving layout, category/bag grouping, print options) is preserved; only the rendering mechanism changes.
+
+1. **No more Playwright, no more Chromium, no more PdfExportService.** The checklist is a plain server-rendered HTML page styled with `@media print` CSS (the same `column-count: 2` / `break-inside: avoid` technique 1.1 already specified, just applied to a page the browser prints itself). A "Print" button calls `window.print()`; the browser's native dialog handles pagination, paper size, grayscale, and "Save as PDF" as just another print destination.
+2. **Why:** the Playwright approach required bundling Chromium (the official Playwright base image alone runs ~1.5-2GB, since it also includes Firefox and WebKit) into the deployment image for a self-hosted, typically single-user app where the browser doing the printing is already sitting right there on the user's machine. Avoiding Chromium entirely removes that image-size cost and a whole dependency (Playwright + its OS-level Chromium libraries) with no loss of the two-column/no-split/print-options requirements that actually matter.
+3. **Real capability lost:** custom per-page headers/footers with app-controlled page numbering ("Page 2 of 5" styled by us) are **not achievable** from a browser print — that's a Paged Media feature (`@page { @top-center {...} }`) that browsers don't implement for HTML-to-print, unlike Playwright's `page.pdf()` `headerTemplate`/`footerTemplate`. Chrome's own print dialog has a generic, unstyled "Headers and footers" toggle (title/URL/date/page number) as a partial substitute. FR-034 and FR-036 are revised to reflect this rather than pretend it's unaffected.
+4. **Category continuation ("(continued)" headings, FR-037) remains deferred** — it was already undeliverable natively under the Playwright/Chromium approach too, so this isn't a new loss.
 
 ---
 
@@ -143,7 +154,7 @@ Each generated Trip Item supports: Quantity Override, Packed, Removed from Trip,
 - **Modules:** Create reusable packing modules.
 - **Categories:** Manage category names and display order.
 - **Trip History:** Duplicate trip, review packing list, compare trips.
-- **Settings:** Theme, Backup, CSV Import & Export of master data (see Data Import & Export). *(Trip-level export in Version 1 is limited to PDF checklists; structured Trip export is deferred to the future REST API.)*
+- **Settings:** Theme, Backup, CSV Import & Export of master data (see Data Import & Export). *(Trip-level output in Version 1 is limited to the browser-printable checklist — see Print & Export; structured Trip export is deferred to the future REST API.)*
 
 ---
 
@@ -159,19 +170,19 @@ Each Trip Item may optionally be assigned to a specific bag. Bag assignments are
 
 ---
 
-## Print & Export
+## Print & Export (Revised in 1.6)
 
-Users can generate a printer-friendly packing checklist from any Trip, exportable as PDF for printing, sharing, or archival. The format minimizes paper use while remaining easy to read and check off by hand.
+Users can print a printer-friendly packing checklist from any Trip. The format minimizes paper use while remaining easy to read and check off by hand. **There is no server-generated PDF file** — the checklist is a dedicated, print-styled page; the user prints it (or uses their browser's "Save as PDF" print destination) directly. This is a deliberate simplification over 1.1–1.5's Playwright/Chromium approach — see Revision Summary (1.5 → 1.6) and "Printable Layout — Rendering Approach".
 
-**Default layout:** two evenly sized columns. Each page contains Trip Name, Destination, Travel Dates, Print Date, category headings, a checkbox beside every item, and quantity per item.
+**Default layout:** two evenly sized columns via CSS multi-column. The top of the document (once, not repeated per page) shows Trip Name, Destination, Travel Dates, and Print Date, followed by category headings, a checkbox beside every item, and quantity per item.
 
-**Print options:** include categories / quantities / notes / bag assignments / packed status; print only unpacked or all items; color or grayscale.
+**Print options:** include categories / quantities / notes / bag assignments / packed status; print only unpacked or all items; color or grayscale (grayscale/color is a browser print-dialog setting, not an app option).
 
 **Optional formats:** Standard (default), Compact (smaller font, reduced spacing), By Bag (grouped by assigned bag), Blank Checklist (unchecked copy for reuse).
 
-**PDF metadata:** Trip Name, Destination, Author, Creation Date, Application Version.
+**On-page identification (replaces "PDF metadata" from 1.5):** Trip Name, Destination, and Print Date are rendered as visible page content (not embedded PDF document-properties, since there's no app-controlled PDF file to attach them to). If the user's own "Save as PDF" print flow produces a PDF, whatever metadata Chrome itself assigns applies — the app does not set it.
 
-> **Data export scope (Revised in 1.4):** Trip-level export remains PDF-only — there is no bulk export of Trip/Trip Item/Bag/packing-status data, and none is planned short of the future REST API. **Master data** (Categories, Items, Modules), however, now has a CSV export mirroring the import format — see "Data Import & Export (CSV)".
+> **Data export scope (Revised in 1.4):** Trip-level output remains print/checklist-only — there is no bulk export of Trip/Trip Item/Bag/packing-status data, and none is planned short of the future REST API. **Master data** (Categories, Items, Modules), however, now has a CSV export mirroring the import format — see "Data Import & Export (CSV)".
 
 ---
 
@@ -232,42 +243,48 @@ Camera Batteries,Camera,2,,true,Camera,
 
 ### Not imported/exported
 
-Trips, Trip Items, Bags, packing status, and per-trip overrides are never imported or exported via CSV — they are runtime data generated from the master data above. The only Trip-level output is the PDF checklist (see Print & Export).
+Trips, Trip Items, Bags, packing status, and per-trip overrides are never imported or exported via CSV — they are runtime data generated from the master data above. The only Trip-level output is the browser-printable checklist (see Print & Export).
 
 ---
 
-## Printable Layout — Rendering Approach (Revised in 1.1)
+## Printable Layout — Rendering Approach (Revised in 1.6)
 
-Version 1.0 specified a custom layout engine that measures the rendered height of each category and distributes categories across columns. **In 1.1 this is delegated to the browser's layout engine.** The checklist is rendered as HTML/CSS and printed to PDF by headless Chromium (Playwright). This satisfies the two-column, minimal-paper, and no-split requirements with standard CSS rather than a hand-written height calculator.
+Version 1.0 specified a custom layout engine measuring rendered category heights to distribute columns by hand. 1.1 delegated that to a browser's layout engine, but still generated a PDF file server-side via headless Chromium (Playwright). **1.6 goes one step further and removes server-side rendering entirely**: the checklist is a plain server-rendered page (Next.js Server Component, same as every other page in the app) styled for print with `@media print` CSS, and the user's own browser does the printing — no headless browser process, no PDF file ever touches the server.
+
+### Print route
+
+A dedicated route (e.g. `/trips/[id]/print`) renders *only* the checklist content — no nav, no interactive controls (buttons, selects, forms) from the main Packing List screen. Print options (Standard/Compact/Large, include notes/bag assignments, unpacked-only, By Category/By Bag) are query params the route reads server-side, reusing the same grouping/filtering already built for the interactive Packing List page (view/filter/scope). A "Print" button on the page calls `window.print()`.
 
 ### Column layout
 
-The two-column paper-saving layout is produced with CSS multi-column:
+The two-column paper-saving layout is still produced with CSS multi-column — unchanged from 1.1's approach, just applied under `@media print` instead of fed to Playwright:
 
 ```css
-@page { size: Letter; margin: 1.4cm 1.2cm; }   /* A4 selectable via option */
-.checklist { column-count: 2; column-gap: 1.4cm; column-fill: auto; }
-.category  { break-inside: avoid; }            /* never split a category */
+@media print {
+  @page { size: letter; margin: 1.4cm 1.2cm; }   /* A4 selectable via option */
+  .checklist { column-count: 2; column-gap: 1.4cm; column-fill: auto; }
+  .category  { break-inside: avoid; }            /* never split a category */
+}
 ```
 
-- `column-fill: auto` fills the first column before spilling into the second, minimizing page count (best paper saving). `column-fill: balance` is a one-line alternative if evenly balanced columns are preferred over tight packing.
+- `column-fill: auto` fills the first column before spilling into the second, minimizing page count (best paper saving).
 - `break-inside: avoid` on each category block keeps categories intact across column and page boundaries.
 
-### Headers, footers, page numbering
+### Headers, footers, page numbering (capability reduced — see Revision Summary 1.5 → 1.6)
 
-Page headers/footers ("Page 2 of 5", trip name, date) are produced by Playwright's `page.pdf()` `headerTemplate` / `footerTemplate` using its built-in `pageNumber`, `totalPages`, `title`, and `date` classes — configuration, not custom code.
+There is no app-controlled per-page header/footer or page numbering ("Page 2 of 5" styled by us) — browsers don't expose that for HTML-to-print (`@page` margin-box content / CSS Paged Media is not implemented by Chromium's print engine, unlike Playwright's headless `page.pdf()` API which had first-class support for it). Trip Name, Destination, and Print Date are instead rendered once at the top of the document. If a page-number/date/title footer is wanted, the user can enable Chrome's own generic "Headers and footers" print-dialog option — its content and styling aren't app-controlled.
 
 ### Category continuation ("continued" heading)
 
-The repeated **"Clothing (continued)"** heading when a single category overflows a page is **deferred**. CSS/Chromium cannot repeat a block heading natively. For 1.1, an oversized category may break without a repeated heading. The measure-and-pre-split logic required to repeat the heading is implemented only if a real trip hits the case (the 300-item stress scenario), and it is the piece most safely postponed.
+Still **deferred**, same reasoning as 1.1: neither approach can repeat a block heading natively when a category spans a page break. Unchanged by this revision (FR-037).
 
 ### Why this approach
 
-Every print option — notes, bag assignments, grayscale, unpacked-only, compact/large themes, and Bag View — becomes a template conditional or CSS class rather than engine work. Bag View is the same template fed data grouped by bag instead of category; grouping happens in the service layer, and the renderer stays presentation-only.
+Every print option — notes, bag assignments, unpacked-only, compact/large themes, and Bag View — is a query param and a CSS class, same as before, just without a rendering engine in between. Bag View reuses the exact grouping already implemented for the interactive Packing List page.
 
-### Trade-off noted
+### Trade-off accepted
 
-`@react-pdf/renderer` was considered as a no-Chromium alternative (lighter image, no browser process) but has no multi-column support, which would require re-implementing the exact column-balancing algorithm and every print option in a non-CSS styling model. Because the target is self-hosted deployment on capable hardware where image size and occasional Chromium invocation are non-issues, Playwright is preferred. `@react-pdf/renderer` remains a fallback if bundling Chromium becomes a deployment problem.
+Losing app-controlled page headers/footers and PDF document metadata (Trip Name/Author/etc. as embedded file properties) is a real capability reduction from 1.1's design. It's accepted because: (a) this is a self-hosted, typically single-user app where "print this and check it off" is the actual use case, not sharing branded PDFs; (b) the browser's own print-to-PDF already produces a usable file when needed; (c) it removes an entire dependency (Playwright) and its OS-level Chromium bundle from the Docker image. If per-page headers/branded PDF metadata become a real need later, reintroducing a server-side renderer (Playwright, or `@react-pdf/renderer` if avoiding a browser process matters more than multi-column support) is a self-contained addition — nothing else in the architecture depends on how the checklist gets to paper.
 
 ---
 
@@ -306,8 +323,7 @@ PostgreSQL
 - **TripService:** create trips, select modules, generate packing lists (snapshotting item name/category/notes/quantity into Trip Items), deduplicate items, apply default quantities, add further Modules to an existing Trip (merge without disturbing existing state), manage trip-specific overrides. Enforces single-owner scoping on every operation.
 - **ItemService:** create/update items, manage default quantities, manage categories, manage parent/child relationships (recursive expansion, cycle-safe).
 - **ModuleService:** create modules, add items, auto-add required child items, prevent duplicate module items.
-- **PackingListService:** mark packed, update trip quantities, remove items from a trip, assign items to bags, filter and sort/group packing lists (including grouping for Bag View and PDF).
-- **PdfExportService:** render trip data to HTML, invoke Playwright to produce PDF, apply layout/theme options and metadata.
+- **PackingListService:** mark packed, update trip quantities, remove items from a trip, assign items to bags, filter and sort/group packing lists (including grouping for Bag View and for the print route). *(1.6: no separate PdfExportService — the print route is a presentation-only Server Component reusing this service's grouping/filtering; there is no PDF-generation step to encapsulate.)*
 - **BagService:** create bags for trips, assign items to bags, move items between bags.
 - **ImportService:** parse and validate the Items CSV, preview results, and commit the two-pass import (upsert Items, auto-create Categories/Modules, wire parent/child, enforce the module child invariant) within a single transaction, scoped to the importing user.
 - **ExportService:** read a user's Categories, Items (with parent/child links), and Modules (with membership) and serialize them to the same Items CSV shape used for import, scoped to the exporting user. *(1.4.)*
@@ -358,7 +374,7 @@ PostgreSQL
 
 > **UI framework rationale (replaces the Bootstrap decision in 1.0):** Tailwind + shadcn/ui is the current default for Next.js App Router projects and works cleanly with React Server Components, where Bootstrap's JavaScript components and React-Bootstrap tend to require client-side wrappers. shadcn/ui components are copied into the codebase (not a black-box dependency), giving full control and easier long-term maintenance, and Radix provides accessibility (focus management, keyboard nav, ARIA) out of the box. Tailwind's utility model also removes the need for a separate SCSS build pipeline.
 
-**Backend:** implemented within the Next.js application — authentication, route handlers, business logic, PDF generation, data validation.
+**Backend:** implemented within the Next.js application — authentication, route handlers, business logic, print/checklist rendering, data validation.
 
 **Service layer:** dedicated, reusable by React UI, route handlers, future REST APIs, background jobs, and future mobile apps. The UI never talks to the database directly.
 
@@ -406,15 +422,15 @@ All application data is stored exclusively in PostgreSQL. Browser storage is not
 
 Deployment uses Docker Compose. Required containers: Smart Packing Planner and PostgreSQL. Persistent Docker volumes store PostgreSQL data, and application upgrades do not affect stored user data.
 
-> **Deployment note (new in 1.1):** The application image must include the Chromium dependencies Playwright requires for PDF generation (system libraries), or use Playwright's official base image. This is the main image-size consequence of the PDF approach and is acceptable for self-hosted deployment.
+> **Deployment note (superseded in 1.6):** 1.1 required bundling Playwright's Chromium dependencies into the application image (the official Playwright base image alone runs ~1.5-2GB, since it bundles Chromium, Firefox, and WebKit). **1.6 removes this entirely** — there is no headless browser in the image, and no Chromium-related deployment consideration at all.
 
 ### Configuration
 
 Environment variables, e.g.: Database Connection String, Auth Secret (`AUTH_SECRET`), Application URL, Logging Level, Timezone.
 
-### PDF generation
+### Print / checklist rendering (Revised in 1.6)
 
-Packing lists are rendered from HTML/CSS and generated **server-side via headless Chromium (Playwright)**. Supported: two-column layout, category grouping, CSS-based column balancing, headers, footers, page numbering, optional bag assignments, optional notes, and selectable themes (Standard / Compact / Large Print). A pooled/reused browser instance is used since PDF generation is occasional rather than a hot path.
+Packing lists are rendered as a plain server-rendered page styled with `@media print` CSS — **no headless browser, no server-side PDF generation.** Supported: two-column layout, category or bag grouping, CSS-based column balancing, optional bag assignments, optional notes, and selectable themes (Standard / Compact / Large Print). The user's own browser handles printing and, optionally, "Save as PDF." See "Printable Layout — Rendering Approach."
 
 ### Logging
 
@@ -479,18 +495,18 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 
 ### Print & export
 
-- **FR-027** — The application shall generate a printable packing checklist for any Trip.
-- **FR-028** — The printable checklist shall support export to PDF.
-- **FR-028a** — Version 1 shall provide no bulk export of Trip-level data (Trips, Trip Items, Bags, packing status); the only Trip-level export is the PDF checklist, with structured Trip export deferred to the future REST API. Master data (Categories, Items, Modules) has a CSV export per FR-057. *(1.2; scope narrowed to Trip-level data in 1.4.)*
-- **FR-029** — The default printable layout shall use a two-column page layout to minimize paper usage. *(1.1: implemented with CSS multi-column, not a custom height-calculation engine.)*
+- **FR-027** — The application shall render a printable packing checklist for any Trip.
+- **FR-028** — The printable checklist shall be printable directly from the browser (including "Save as PDF" via the browser's own print dialog). *(Revised in 1.6: no app-generated PDF file; see Revision Summary 1.5 → 1.6.)*
+- **FR-028a** — Version 1 shall provide no bulk export of Trip-level data (Trips, Trip Items, Bags, packing status); the only Trip-level output is the browser-printed checklist, with structured Trip export deferred to the future REST API. Master data (Categories, Items, Modules) has a CSV export per FR-057. *(1.2; scope narrowed to Trip-level data in 1.4.)*
+- **FR-029** — The default printable layout shall use a two-column page layout to minimize paper usage. *(1.1: CSS multi-column, not a custom height-calculation engine; 1.6: applied via `@media print` for browser printing rather than fed to a server-side renderer.)*
 - **FR-030** — Items shall remain grouped by Category unless the user selects an alternate print format.
 - **FR-031** — Users shall be able to optionally include Bag Assignments, Notes, and Quantities in the printed checklist.
-- **FR-032** — The generated PDF shall be suitable for printing on US Letter and A4 paper sizes.
+- **FR-032** — The printed checklist shall be suitable for printing on US Letter and A4 paper sizes. *(1.6: via `@page` CSS sizing, same as any browser print job.)*
 - **FR-033** — Categories shall not be split across columns unless required by page constraints. *(1.1: satisfied via `break-inside: avoid`.)*
-- **FR-034** — Each printed page shall contain a consistent header and page numbering. *(1.1: via Playwright header/footer templates.)*
-- **FR-035** — Users shall be able to select Standard, Compact, or Large Print layouts before PDF generation.
-- **FR-036** — Generated PDFs shall include metadata: Trip Name, Destination, Author, Creation Date, Application Version.
-- **FR-037** *(Deferred)* — If a single Category spans multiple pages, the heading should repeat with a "(continued)" suffix. Deferred in 1.1; implemented only if a real trip requires it.
+- **FR-034** — Trip Name, Destination, and Print Date shall appear at the top of the printed document. *(Revised in 1.6 — previously specified as a consistent per-page header with app-controlled page numbering via Playwright's header/footer templates; browsers do not expose that capability for HTML-to-print. A generic, unstyled page-number/date footer is available only if the user enables it via their browser's own print-dialog options.)*
+- **FR-035** — Users shall be able to select Standard, Compact, or Large Print layouts before printing.
+- **FR-036** — The printed checklist shall visibly display Trip Name, Destination, and Print Date. *(Revised in 1.6 — previously specified as embedded PDF document metadata (Author, Application Version) via Playwright; with no app-generated PDF file, there is no document-properties field to set. Author/Application Version are dropped as requirements rather than faked as on-page content.)*
+- **FR-037** *(Deferred)* — If a single Category spans multiple pages, the heading should repeat with a "(continued)" suffix. Deferred in 1.1 for the same reason it remains undeliverable in 1.6: neither a browser's native print engine nor headless Chromium can repeat a block heading across a page break from plain HTML/CSS. Implemented only if a real trip requires it.
 
 ### Architecture & platform
 
@@ -571,26 +587,26 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 
 ### UC-010 — Print Packing Checklist
 **Actor:** User.
-**Flow:** Open a Trip → Print Checklist → choose options → Generate PDF → print or save.
-**System response:** Service renders HTML, Playwright produces a two-column PDF with headers and page numbers.
-**Result:** A printer-friendly checklist suitable for manual use.
+**Flow:** Open a Trip → Print Checklist → choose options → browser Print dialog opens → print or "Save as PDF".
+**System response:** The print route renders a two-column checklist styled with `@media print` CSS; `window.print()` opens the browser's native print dialog.
+**Result:** A printer-friendly checklist suitable for manual use, with PDF saving handled by the browser if wanted. *(Revised in 1.6 — no server-side PDF generation.)*
 
 ### UC-011 — Print Bag-Specific Checklist
 **Actor:** User.
-**Flow:** Open a Trip → Print by Bag → Generate PDF.
-**System response:** Items are grouped by assigned bag.
+**Flow:** Open a Trip → Print by Bag → Print dialog opens.
+**System response:** Items are grouped by assigned bag, reusing the same grouping as Bag View.
 **Result:** The user can pack one bag at a time from the printed checklist.
 
 ### UC-012 — Generate a Balanced Printable Checklist
 **Actor:** User.
-**Flow:** Open a Trip → Print Checklist → Standard layout → Generate PDF.
-**System response:** Groups items by category; CSS multi-column layout distributes categories across two columns and avoids splitting them; Playwright renders the PDF.
+**Flow:** Open a Trip → Print Checklist → Standard layout → Print dialog opens.
+**System response:** Groups items by category; CSS multi-column layout distributes categories across two columns and avoids splitting them; the browser renders and paginates the print output.
 **Result:** A clean, balanced, printer-friendly checklist with minimal wasted space.
 
 ### UC-013 — Print a Large Packing List
 **Actor:** User. **Scenario:** A Trip contains 300+ items.
-**System response:** Chromium paginates automatically, continues categories across pages only when necessary, and repeats headers and page numbers.
-**Result:** Even very large lists remain readable and easy to pack from. *(Repeated "(continued)" category headings are deferred per FR-037.)*
+**System response:** The browser paginates automatically and continues categories across pages only when necessary.
+**Result:** Even very large lists remain readable and easy to pack from. *(Repeated "(continued)" category headings and app-controlled page numbers are deferred/unavailable per FR-034/FR-037.)*
 
 ### UC-014 — Deploy the Application
 **Actor:** Administrator.
