@@ -40,12 +40,15 @@ export default async function TripDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ view?: string; filter?: string }>;
+  searchParams: Promise<{ view?: string; filter?: string; scope?: string }>;
 }) {
   const { id } = await params;
-  const { view: rawView, filter: rawFilter } = await searchParams;
+  const { view: rawView, filter: rawFilter, scope: rawScope } = await searchParams;
   const view = rawView === "bag" ? "bag" : "category";
   const filter = rawFilter === "packed" || rawFilter === "unpacked" ? rawFilter : "all";
+  const scope = rawScope || "all";
+  const scopeType = scope.startsWith("category:") ? "category" : scope.startsWith("bag:") ? "bag" : "all";
+  const scopeValue = scopeType === "all" ? null : scope.slice(scope.indexOf(":") + 1);
 
   const user = await getCurrentUser();
   const [trip, modules] = await Promise.all([
@@ -55,9 +58,19 @@ export default async function TripDetailPage({
 
   if (!trip) notFound();
 
-  let visibleItems = trip.tripItems.filter((ti) => !ti.removed);
+  const nonRemovedItems = trip.tripItems.filter((ti) => !ti.removed);
+  const allCategories = [...new Set(nonRemovedItems.map((ti) => ti.category))].sort();
+
+  let visibleItems = nonRemovedItems;
   if (filter === "packed") visibleItems = visibleItems.filter((ti) => ti.packed);
   if (filter === "unpacked") visibleItems = visibleItems.filter((ti) => !ti.packed);
+  if (scopeType === "category") visibleItems = visibleItems.filter((ti) => ti.category === scopeValue);
+  if (scopeType === "bag") {
+    visibleItems =
+      scopeValue === "unassigned"
+        ? visibleItems.filter((ti) => !ti.bagId)
+        : visibleItems.filter((ti) => ti.bagId === scopeValue);
+  }
 
   const groups = new Map<string, typeof visibleItems>();
   if (view === "bag") {
@@ -71,21 +84,21 @@ export default async function TripDetailPage({
     }
   }
 
-  function viewLink(v: string) {
+  function buildLink(overrides: { view?: string; filter?: string; scope?: string }) {
+    const v = overrides.view ?? view;
+    const f = overrides.filter ?? filter;
+    const s = overrides.scope ?? scope;
     const params = new URLSearchParams();
     if (v !== "category") params.set("view", v);
-    if (filter !== "all") params.set("filter", filter);
+    if (f !== "all") params.set("filter", f);
+    if (s !== "all") params.set("scope", s);
     const qs = params.toString();
     return `/trips/${trip!.id}${qs ? `?${qs}` : ""}`;
   }
 
-  function filterLink(f: string) {
-    const params = new URLSearchParams();
-    if (view !== "category") params.set("view", view);
-    if (f !== "all") params.set("filter", f);
-    const qs = params.toString();
-    return `/trips/${trip!.id}${qs ? `?${qs}` : ""}`;
-  }
+  const viewLink = (v: string) => buildLink({ view: v });
+  const filterLink = (f: string) => buildLink({ filter: f });
+  const scopeLink = (s: string) => buildLink({ scope: s });
 
   return (
     <div className="flex flex-col gap-6">
@@ -117,6 +130,38 @@ export default async function TripDetailPage({
           <Link href={filterLink("unpacked")} className={filter === "unpacked" ? "font-medium" : "text-muted-foreground"}>
             Unpacked
           </Link>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className="text-muted-foreground">Show:</span>
+          <Link href={scopeLink("all")} className={scope === "all" ? "font-medium" : "text-muted-foreground"}>
+            All
+          </Link>
+          {allCategories.map((c) => (
+            <Link
+              key={`cat-${c}`}
+              href={scopeLink(`category:${c}`)}
+              className={scopeType === "category" && scopeValue === c ? "font-medium" : "text-muted-foreground"}
+            >
+              {c}
+            </Link>
+          ))}
+          {trip.bags.map((bag) => (
+            <Link
+              key={`bag-${bag.id}`}
+              href={scopeLink(`bag:${bag.id}`)}
+              className={scopeType === "bag" && scopeValue === bag.id ? "font-medium" : "text-muted-foreground"}
+            >
+              {bag.name}
+            </Link>
+          ))}
+          {trip.bags.length > 0 && (
+            <Link
+              href={scopeLink("bag:unassigned")}
+              className={scopeType === "bag" && scopeValue === "unassigned" ? "font-medium" : "text-muted-foreground"}
+            >
+              Unassigned
+            </Link>
+          )}
         </div>
       </div>
 
