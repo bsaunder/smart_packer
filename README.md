@@ -61,7 +61,14 @@ Built with [Next.js](https://nextjs.org) (App Router), TypeScript, Tailwind CSS,
 
 ## CSV Import & Export
 
-Master data — Categories, Items (including parent/child relationships and default quantities), and Modules (including membership) — can be imported and exported as a single CSV file from **Settings**. Trips, Trip Items, and Bags are never part of this file; they're runtime data generated from master data, not migrated directly. A ready-to-use example is at [samples/items-sample.csv](./samples/items-sample.csv) — download it from Settings to try import, or use it as-is to seed a fresh database.
+Master data — Categories, Items (including parent/child relationships and default quantities), and Modules (including membership) — can be imported and exported as a single CSV file from **Settings**. Trips, Trip Items, and Bags are never part of this file; they're runtime data generated from master data, not migrated directly.
+
+Two ready-to-use example files:
+
+- [samples/items-sample.csv](./samples/items-sample.csv) — a small (21-item) example covering every column, good for reading alongside this doc.
+- [samples/items-test-data.csv](./samples/items-test-data.csv) — 155 items across 13 categories and 16 modules, for exercising the app with a realistic-sized catalog. Includes a shared child across two parents (Z-330 Strobe under two different camera bodies) and a two-level parent/child chain (OM-D E-M1 Mk II → Battery Charger → Charging Cable) to test recursive expansion. A few items are marked `active=false`, and one note contains a comma (quoted per RFC 4180) to exercise that on both import and export.
+
+Download either from Settings to try import, or use one as-is to seed a fresh database.
 
 ### File format
 
