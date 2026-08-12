@@ -14,8 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createModuleAction, addItemToModuleAction } from "./actions";
+import { createModuleAction, addItemToModuleAction, removeItemFromModuleAction } from "./actions";
 
 export default async function ModulesPage() {
   const user = await getCurrentUser();
@@ -43,11 +44,26 @@ export default async function ModulesPage() {
               <CardTitle>{m.name}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <p className="text-sm text-muted-foreground">
-                {m.moduleItems.length === 0
-                  ? "No items yet."
-                  : m.moduleItems.map((mi) => mi.item.name).join(", ")}
-              </p>
+              {m.moduleItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No items yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {m.moduleItems.map((mi) => (
+                    <form key={mi.itemId} action={removeItemFromModuleAction}>
+                      <input type="hidden" name="moduleId" value={m.id} />
+                      <input type="hidden" name="itemId" value={mi.itemId} />
+                      <button
+                        type="submit"
+                        title={`Remove ${mi.item.name} from this module`}
+                        className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+                      >
+                        {mi.item.name}
+                        <X className="size-3" />
+                      </button>
+                    </form>
+                  ))}
+                </div>
+              )}
               {items.length > 0 && (
                 <form action={addItemToModuleAction} className="flex items-end gap-3">
                   <input type="hidden" name="moduleId" value={m.id} />
