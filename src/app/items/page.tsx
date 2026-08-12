@@ -22,7 +22,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { createItemAction, createCategoryInlineAction, addChildAction } from "./actions";
+import Link from "next/link";
+import {
+  createItemAction,
+  createCategoryInlineAction,
+  addChildAction,
+  setItemActiveAction,
+} from "./actions";
 
 export default async function ItemsPage() {
   const user = await getCurrentUser();
@@ -93,11 +99,13 @@ export default async function ItemsPage() {
             <TableHead className="text-right">Default qty</TableHead>
             <TableHead>Notes</TableHead>
             <TableHead>Children</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="w-20" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {items.map((item) => (
-            <TableRow key={item.id}>
+            <TableRow key={item.id} className={item.active ? "" : "text-muted-foreground"}>
               <TableCell>{item.name}</TableCell>
               <TableCell>{item.category.name}</TableCell>
               <TableCell className="text-right">{item.defaultQuantity}</TableCell>
@@ -105,11 +113,30 @@ export default async function ItemsPage() {
               <TableCell className="text-muted-foreground">
                 {item.childLinks.map((l) => l.childItem.name).join(", ")}
               </TableCell>
+              <TableCell>
+                <form action={setItemActiveAction}>
+                  <input type="hidden" name="itemId" value={item.id} />
+                  <input type="hidden" name="active" value={(!item.active).toString()} />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant={item.active ? "outline" : "secondary"}
+                    aria-pressed={item.active}
+                  >
+                    {item.active ? "Active" : "Inactive"}
+                  </Button>
+                </form>
+              </TableCell>
+              <TableCell>
+                <Button asChild size="sm" variant="ghost">
+                  <Link href={`/items/${item.id}/edit`}>Edit</Link>
+                </Button>
+              </TableCell>
             </TableRow>
           ))}
           {items.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
+              <TableCell colSpan={7} className="text-center text-muted-foreground">
                 No items yet.
               </TableCell>
             </TableRow>

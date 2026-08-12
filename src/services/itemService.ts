@@ -11,6 +11,13 @@ export async function listItems(ownerId: string) {
   });
 }
 
+export async function getItem(ownerId: string, itemId: string) {
+  return prisma.item.findFirst({
+    where: { id: itemId, ownerId },
+    include: { category: true },
+  });
+}
+
 export async function createItem(
   ownerId: string,
   input: {

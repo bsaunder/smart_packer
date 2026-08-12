@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
-import { createItem, addChildItem } from "@/services/itemService";
+import { createItem, addChildItem, updateItem } from "@/services/itemService";
 import { findOrCreateCategoryByName } from "@/services/categoryService";
 
 export async function createItemAction(formData: FormData) {
@@ -32,5 +32,15 @@ export async function addChildAction(formData: FormData) {
   if (!parentId || !childId) return;
 
   await addChildItem(user.id, parentId, childId);
+  revalidatePath("/items");
+}
+
+export async function setItemActiveAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const itemId = String(formData.get("itemId") ?? "");
+  const active = formData.get("active") === "true";
+  if (!itemId) return;
+
+  await updateItem(user.id, itemId, { active });
   revalidatePath("/items");
 }
