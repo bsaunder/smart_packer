@@ -46,3 +46,25 @@ export async function reorderCategories(ownerId: string, orderedIds: string[]) {
     )
   );
 }
+
+/** Swaps a Category with its immediate neighbor in display order. A no-op at either end of the list. */
+export async function moveCategory(
+  ownerId: string,
+  categoryId: string,
+  direction: "up" | "down"
+) {
+  const categories = await listCategories(ownerId);
+  const index = categories.findIndex((c) => c.id === categoryId);
+  if (index === -1) throw new Error("Category not found for this owner.");
+
+  const swapWith = direction === "up" ? index - 1 : index + 1;
+  if (swapWith < 0 || swapWith >= categories.length) return;
+
+  const a = categories[index];
+  const b = categories[swapWith];
+
+  await prisma.$transaction([
+    prisma.category.update({ where: { id: a.id, ownerId }, data: { sortOrder: b.sortOrder } }),
+    prisma.category.update({ where: { id: b.id, ownerId }, data: { sortOrder: a.sortOrder } }),
+  ]);
+}

@@ -3,6 +3,7 @@ import { listCategories } from "@/services/categoryService";
 
 // Per-user data; must not be statically prerendered at build time.
 export const dynamic = "force-dynamic";
+import { ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { createCategoryAction } from "./actions";
+import { createCategoryAction, moveCategoryAction } from "./actions";
 
 export default async function CategoriesPage() {
   const user = await getCurrentUser();
@@ -36,14 +37,43 @@ export default async function CategoriesPage() {
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
-            <TableHead className="text-right">Sort order</TableHead>
+            <TableHead className="w-24 text-right">Order</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {categories.map((c) => (
+          {categories.map((c, index) => (
             <TableRow key={c.id}>
               <TableCell>{c.name}</TableCell>
-              <TableCell className="text-right">{c.sortOrder}</TableCell>
+              <TableCell>
+                <div className="flex justify-end gap-1">
+                  <form action={moveCategoryAction}>
+                    <input type="hidden" name="categoryId" value={c.id} />
+                    <input type="hidden" name="direction" value="up" />
+                    <Button
+                      type="submit"
+                      size="icon-sm"
+                      variant="ghost"
+                      disabled={index === 0}
+                      aria-label={`Move ${c.name} up`}
+                    >
+                      <ArrowUp />
+                    </Button>
+                  </form>
+                  <form action={moveCategoryAction}>
+                    <input type="hidden" name="categoryId" value={c.id} />
+                    <input type="hidden" name="direction" value="down" />
+                    <Button
+                      type="submit"
+                      size="icon-sm"
+                      variant="ghost"
+                      disabled={index === categories.length - 1}
+                      aria-label={`Move ${c.name} down`}
+                    >
+                      <ArrowDown />
+                    </Button>
+                  </form>
+                </div>
+              </TableCell>
             </TableRow>
           ))}
           {categories.length === 0 && (
