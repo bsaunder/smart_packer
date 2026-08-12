@@ -1,21 +1,21 @@
-import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
 
 /**
- * Milestone 1 stub: real auth (Better Auth) isn't wired up yet, so every
- * request acts as the single dev user seeded by `prisma/seed.ts`. Services
- * already take an explicit ownerId, so swapping this for a real session
- * lookup later is a one-function change.
+ * Every Server Component/Server Action in this app calls this first and
+ * treats the result as guaranteed-present -- redirecting here (rather than
+ * returning null) keeps every existing call site correct without an
+ * app-wide null-check refactor, and is itself the CVE-2025-29927-safe
+ * authorization boundary DESIGN.md requires: this runs in the actual
+ * page/action code, not just middleware (see src/middleware.ts, which only
+ * does a coarse optimistic redirect based on the session cookie's
+ * presence).
  */
 export async function getCurrentUser() {
-  const user = await prisma.user.findUnique({
-    where: { username: process.env.ADMIN_USERNAME ?? "admin" },
-  });
-
-  if (!user) {
-    throw new Error(
-      "No dev user found — run `pnpm db:seed` before using the app."
-    );
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) {
+    redirect("/login");
   }
-
-  return user;
+  return session.user;
 }

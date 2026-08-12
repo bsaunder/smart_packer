@@ -30,7 +30,7 @@ pnpm db:migrate       # applies prisma/migrations against the running db
 pnpm db:seed          # creates the ADMIN_USERNAME/ADMIN_PASSWORD dev user from .env
 ```
 
-`db:seed` is what the app currently authenticates as — there's no real login yet (see DESIGN.md's Authentication section for the planned Better Auth work); every page acts as this one seeded user.
+`db:seed` creates the initial admin account — both the `User` row and its Better Auth credential — from `ADMIN_USERNAME`/`ADMIN_PASSWORD` in `.env` (defaults: `admin` / `change-me`). It's a first-run bootstrap: it no-ops once any user exists, so re-running it is always safe.
 
 ### 4. Run the dev server
 
@@ -38,7 +38,7 @@ pnpm db:seed          # creates the ADMIN_USERNAME/ADMIN_PASSWORD dev user from 
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Steps 2–3 only need to be repeated when you reset the database; day-to-day you just need `docker compose up -d db` running and `pnpm dev`.
+Open [http://localhost:3000](http://localhost:3000) and sign in with the `ADMIN_USERNAME`/`ADMIN_PASSWORD` from `.env`. Steps 2–3 only need to be repeated when you reset the database; day-to-day you just need `docker compose up -d db` running and `pnpm dev`.
 
 ### Alternative: run the whole stack in Docker (production / self-hosted deployment)
 

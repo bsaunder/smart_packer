@@ -1,7 +1,20 @@
 # Smart Packing Planner — Design & Requirements Document
 
-**Version:** 1.8
-**Supersedes:** 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+**Version:** 1.9
+**Supersedes:** 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+
+---
+
+## Revision Summary (1.8 → 1.9)
+
+This revision implements real authentication (FR-049–FR-051), replacing the single-hardcoded-dev-user stub every service/page has called through `getCurrentUser()` since Milestone 1. Row-level `ownerId` scoping itself needed no changes — it was already correct, just fed a stub user; it now receives a real session user.
+
+1. **Better Auth is wired up** with the Prisma adapter, the `username` plugin (Credentials-style username + password, no email/mail-server flows), and Argon2id password hashing via `@node-rs/argon2` (chosen over the `argon2` package because it ships prebuilt platform binaries — `argon2` requires a native compiler toolchain, which isn't guaranteed on every dev/build machine; `@node-rs/argon2` needed no such assumption and defaults to Argon2id already, matching FR-050 with zero custom config).
+2. **Schema**: Better Auth's Prisma adapter owns `User`'s core fields (`id`, `name`, `email`, `emailVerified`, `image`, plus `username`/`displayUsername` from the plugin) and adds `Session`, `Account` (credentials — the Argon2id hash lives in `Account.password`, keyed by `providerId: "credential"`; a user has no direct password column), and `Verification` (unused in Version 1 — no email flows). Generated via `better-auth generate` against a hand-written `src/lib/auth.ts`, then hand-merged with the app's existing `isAdmin`/`isActive`/ownership-relation fields on `User` rather than accepted verbatim — the generated schema is a starting point, not something to apply blindly. `passwordHash` is gone from `User`.
+3. **Better Auth requires an email even though this app has none to collect** (DESIGN.md's whole premise is no mail server). Accounts are provisioned with a synthesized, non-deliverable address (`{username}@local.invalid`, using the RFC 2606 reserved `.invalid` TLD) purely to satisfy the schema — never displayed, never emailed to.
+4. **No self-service signup, enforced at the library level, not just by omitting a UI**: `emailAndPassword.disableSignUp: true` blocks the sign-up endpoint outright (verified: `POST /api/auth/sign-up/email` returns 400 `EMAIL_PASSWORD_SIGN_UP_DISABLED`, even absent any signup page). Because that flag blocks *all* invocations of `signUpEmail` — including server-side calls, not only the public HTTP route — admin-driven user creation (the seed script's first-run bootstrap, and any future admin tooling) creates the `User` and its credential `Account` row directly via Prisma, hashing with the same `@node-rs/argon2` call Better Auth itself is configured to use, so the result verifies correctly on login. This is *not* Better Auth's `admin` plugin (which models permissions via a `role` field/`adminRoles` config, a bigger schema and scope commitment) — deferred until the "admin user management" gap (create/deactivate/reset-password UI for users beyond the bootstrap admin, per FR-052) actually gets built, at which point revisit whether the `admin` plugin's `createUser` is a better fit than continuing the direct-Prisma pattern.
+5. **Authorization boundary**: `getCurrentUser()` (`src/lib/session.ts`) calls `auth.api.getSession()` and `redirect("/login")` if absent, so it keeps returning a guaranteed-present user to its ~30 existing call sites with no signature change. `src/proxy.ts` (Next.js 16 renamed `middleware.ts` → `proxy.ts`) does a coarse, cookie-presence-only redirect for pre-render UX — per FR-051/CVE-2025-29927, this is explicitly *not* the authorization boundary; `getCurrentUser()` inside actual page/action code is.
+6. **Deployment**: no new environment variables — `AUTH_SECRET` and `APP_URL` (both already present since the original Docker scaffold) map directly to Better Auth's `secret` and `baseURL`. `@node-rs/argon2`'s Linux binary needed two separate fixes to actually reach the `app` container: (a) the pnpm lockfile, generated on a Windows dev machine, only resolved the Windows build of the platform package by default — fixed via `supportedArchitectures` in `pnpm-workspace.yaml`; (b) Next's standalone-output file tracing can't follow the dynamic `require()` napi-rs-style native modules use to load their `.node` binary, *and* pnpm nests optional platform packages inside the depending package's own `node_modules` rather than hoisting them, so even a manual `outputFileTracingIncludes` override came up empty — resolved in the `Dockerfile` by installing `@node-rs/argon2` fresh with `npm` (flat resolution, no pnpm nesting) in an isolated scratch directory, then copying the flat result into place.
 
 ---
 
@@ -403,17 +416,16 @@ PostgreSQL
 
 **Database:** PostgreSQL, accessed exclusively through Prisma. Prisma provides strong typing, migrations, relationship management, query generation, and transactions. All persistent data resides in PostgreSQL.
 
-### Authentication (Revised in 1.3)
+### Authentication (Implemented in 1.9)
 
-Version 1.0 specified hand-implemented username/password authentication. **In 1.1, authentication was delegated to a maintained framework (Auth.js v5 primary). In 1.3, the primary choice is revised to Better Auth**, based on ecosystem status as of implementation time (August 2026).
+Version 1.0 specified hand-implemented username/password authentication. **In 1.1, authentication was delegated to a maintained framework (Auth.js v5 primary). In 1.3, the primary choice was revised to Better Auth. In 1.9, it was actually implemented** — see Revision Summary (1.8 → 1.9) for the integration specifics (schema shape, synthetic email, disableSignUp + direct-Prisma admin provisioning, the authorization boundary, and the two Docker/native-binary fixes it took to get `@node-rs/argon2` running in the container).
 
-- **Primary choice: Better Auth.** Rationale: TypeScript-first, self-hosted, owns its schema (clean fit with the Prisma-managed core schema and admin-provisioned/no-signup model), and is the option the wider ecosystem — including Auth.js's own maintainers — now steers new projects toward. Version 1 uses its Credentials-style email/username + password flow.
-- **Acceptable alternative: Auth.js (NextAuth v5).** Still production-usable and has the most mature Prisma adapter, but remains beta-labeled well into 2026 with new development effort concentrated on Better Auth. Reasonable to choose only when migrating an existing Auth.js codebase, not for a greenfield build.
-- **Lucia is explicitly excluded** — it was deprecated in March 2025 and is now a learning resource, not a maintained dependency.
+- **Better Auth**, with the Prisma adapter and the `username` plugin (Credentials-style username + password; no OAuth in Version 1).
+- **Lucia is explicitly excluded** — it was deprecated in March 2025 and is now a learning resource, not a maintained dependency. Auth.js v5 was the prior primary choice but was never implemented against; Better Auth was used from first implementation.
 
-**Password handling:** passwords are hashed with a modern, salted, memory-hard algorithm (Argon2id preferred; bcrypt acceptable). The application never stores plaintext passwords and never implements its own password hashing scheme beyond calling a vetted library.
+**Password handling:** Argon2id via `@node-rs/argon2` (prebuilt binaries, no native compiler toolchain required — see Revision Summary 1.8 → 1.9 for why this was chosen over the `argon2` package). The application never stores plaintext passwords and never implements its own password hashing scheme beyond calling a vetted library.
 
-**Session protection — security requirement:** Authorization checks must be enforced in **route handlers / server actions / the service layer**, not solely in Next.js middleware. This addresses CVE-2025-29927 (disclosed March 2025), where middleware-only session protection in Next.js can be bypassed by spoofing the `x-middleware-subrequest` header. Middleware may be used for coarse redirects, but it is not the authorization boundary.
+**Session protection — security requirement:** Authorization checks must be enforced in **route handlers / server actions / the service layer**, not solely in Next.js middleware. This addresses CVE-2025-29927 (disclosed March 2025), where middleware-only session protection in Next.js can be bypassed by spoofing the `x-middleware-subrequest` header. Middleware (`src/proxy.ts` — Next.js 16 renamed the file convention from `middleware.ts`) may be used for coarse redirects, but it is not the authorization boundary; `getCurrentUser()` (`src/lib/session.ts`) is.
 
 **Future enhancements:** OAuth (Google, Microsoft), passkeys, MFA.
 
@@ -551,10 +563,10 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 
 ### Authentication, authorization & operations
 
-- **FR-049** — The application shall support multiple authenticated users using a maintained authentication framework (**Better Auth**, or Auth.js / NextAuth v5). Custom, from-scratch session or password logic is prohibited. *(1.1; primary/alternative swapped in 1.3.)*
-- **FR-050** — Passwords shall be hashed with a vetted, salted, memory-hard algorithm (Argon2id preferred). *(1.1.)*
-- **FR-051** — Authorization shall be enforced server-side in route handlers/service layer and shall not rely solely on Next.js middleware (CVE-2025-29927). Each user shall access **only their own data**; no data (Categories, Items, Modules, Trips, Bags, packing lists) shall be shared with or visible to any other user. *(1.2: sharing removed.)*
-- **FR-052** — User accounts shall be created by an administrator; the application shall not provide self-service signup. The application shall support admin-driven user creation, deactivation, and password reset, and a first-run mechanism to create the initial administrator. *(1.2.)*
+- **FR-049** — The application shall support multiple authenticated users using a maintained authentication framework (**Better Auth**). Custom, from-scratch session or password logic is prohibited. *(1.1; primary/alternative swapped in 1.3; implemented in 1.9.)*
+- **FR-050** — Passwords shall be hashed with a vetted, salted, memory-hard algorithm (Argon2id preferred). *(1.1; implemented in 1.9 via `@node-rs/argon2`.)*
+- **FR-051** — Authorization shall be enforced server-side in route handlers/service layer and shall not rely solely on Next.js middleware (CVE-2025-29927). Each user shall access **only their own data**; no data (Categories, Items, Modules, Trips, Bags, packing lists) shall be shared with or visible to any other user. *(1.2: sharing removed; 1.9: implemented — `getCurrentUser()` is the enforcement point, `src/proxy.ts` is a UX-only optimistic redirect.)*
+- **FR-052** — User accounts shall be created by an administrator; the application shall not provide self-service signup. The application shall support admin-driven user creation, deactivation, and password reset, and a first-run mechanism to create the initial administrator. *(1.2; first-run bootstrap implemented in 1.9 via the seed script — see Revision Summary 1.8 → 1.9. Ongoing admin UI for creating/deactivating/resetting *additional* users beyond the bootstrap admin remains unbuilt.)*
 - **FR-053** — The application shall support importing master data (Categories, Items, Modules, and parent/child relationships) from a single UTF-8 CSV file with one row per Item, as defined in Data Import (CSV). *(1.2.)*
 - **FR-054** — CSV import shall auto-create referenced Categories and Modules by name, upsert Items by name (merging module memberships and children on re-import), and process the file within a single transaction scoped to the importing user. *(1.2.)*
 - **FR-055** — CSV import shall validate the entire file and present a row-level preview before committing, rejecting the import as a whole if any row fails validation (including unresolved child references, invalid quantities, and parent/child cycles). *(1.2.)*
@@ -642,15 +654,16 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 **System response:** The `migrate` service applies the database schema and, on first startup with no existing users, seeds the initial administrator account from the provided environment variables — automatically, before `app` starts (1.7). No separate commands are run by the administrator.
 **Result:** The application and PostgreSQL are deployed with persistent storage and an administrator account ready for use.
 
-### UC-015 — Authenticate User
+### UC-015 — Authenticate User (Implemented in 1.9)
 **Actor:** User.
-**Flow:** Open the application → enter username and password → Auth.js validates the credentials (server-side) → Dashboard loads.
-**Result:** The user has access only to their own resources.
+**Flow:** Open the application → redirected to `/login` (no session cookie) → enter username and password → Better Auth validates the credentials server-side, against the Argon2id hash in `Account.password` → session cookie set → Dashboard loads.
+**Result:** The user has access only to their own resources. Verified: correct credentials issue a session and unlock every page; incorrect credentials return 401; a direct `POST` to the sign-up endpoint is rejected regardless of a UI existing for it.
 
-### UC-015a — Administer Users
+### UC-015a — Administer Users (Partially implemented — first-run bootstrap only, in 1.9)
 **Actor:** Administrator.
-**Flow:** Open user administration → create a new user with username and initial password (or deactivate an existing user, or reset a user's password).
-**Result:** The new user can log in; each user's data remains fully isolated from every other user's.
+**Flow (first-run bootstrap, implemented):** Deploy with `ADMIN_USERNAME`/`ADMIN_PASSWORD` set → the `migrate` container's seed step creates the initial admin (User + credential Account row) if no users exist yet.
+**Flow (ongoing admin UI — not yet built):** Open user administration → create a new user with username and initial password (or deactivate an existing user, or reset a user's password).
+**Result:** The new user can log in; each user's data remains fully isolated from every other user's. The bootstrap half of this is real; the ongoing admin-UI half is still the "admin user management" gap.
 
 ### UC-016a — Add a Module to an Existing Trip
 **Actor:** User. **Scenario:** A user forgot to include the "Camera" Module when generating a Trip (or the Module did not exist yet).

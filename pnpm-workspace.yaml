@@ -1,6 +1,20 @@
 allowBuilds:
+  '@prisma/client': false
   '@prisma/engines': true
+  better-sqlite3: false
   esbuild: true
   prisma: true
   sharp: false
   unrs-resolver: false
+
+# Lets the lockfile resolve @node-rs/argon2's Linux binary too (not just
+# whatever OS ran `pnpm install`), since the app runs in a Linux container
+# (node:22-slim) regardless of the host developing on Windows.
+supportedArchitectures:
+  os:
+    - win32
+    - linux
+  cpu:
+    - x64
+  libc:
+    - glibc

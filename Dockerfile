@@ -46,6 +46,22 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
+# @node-rs/argon2's platform .node binary is loaded via a dynamic require()
+# that standalone output's file-tracing can't follow statically. Worse,
+# pnpm nests optional platform packages inside the depending package's own
+# node_modules (node_modules/.pnpm/@node-rs+argon2@x/node_modules/@node-rs/
+# argon2-linux-x64-gnu) rather than hoisting them to the top level, so even
+# a manual COPY of a plausible-looking path comes up empty. Simplest fix:
+# install this one small package fresh, here, with npm (flat, no pnpm
+# nesting) in an isolated scratch directory -- running npm directly inside
+# the existing pnpm-structured node_modules crashes trying to parse it --
+# then copy the flat, self-contained result into place.
+RUN mkdir -p /tmp/argon2-install && cd /tmp/argon2-install \
+    && npm install --no-save --omit=dev @node-rs/argon2@2.0.2 \
+    && rm -rf /app/node_modules/@node-rs \
+    && cp -r /tmp/argon2-install/node_modules/@node-rs /app/node_modules/@node-rs \
+    && rm -rf /tmp/argon2-install
+
 EXPOSE 3000
 CMD ["node", "server.js"]
 
