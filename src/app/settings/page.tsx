@@ -1,10 +1,21 @@
 import { Button } from "@/components/ui/button";
 import { ImportForm } from "./import-form";
+import { ThemeToggle } from "./theme-toggle";
 
 export default function SettingsPage() {
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-semibold">Settings</h1>
+
+      <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-medium">Theme</h2>
+          <p className="text-sm text-muted-foreground">
+            Light, dark, or match your system setting.
+          </p>
+        </div>
+        <ThemeToggle />
+      </section>
 
       <section className="flex flex-col gap-3">
         <div>
