@@ -1,7 +1,18 @@
 # Smart Packing Planner — Design & Requirements Document
 
-**Version:** 1.7
-**Supersedes:** 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+**Version:** 1.8
+**Supersedes:** 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+
+---
+
+## Revision Summary (1.7 → 1.8)
+
+This revision implements Trip dates and the Trip History page, both previously named only in passing (Trips page bullet, Suggested Application Pages) with no detail.
+
+1. **Trip dates** (`startDate`/`endDate`, already in the schema since Milestone 1 but never exposed in the UI) are now set at trip creation. They are not editable afterward in this revision.
+2. **Trip History page** (`/trips/history`) lists every Trip — not just upcoming ones — sorted by `endDate ?? startDate ?? createdAt` descending, each showing its date range (if set) and a packed/total item count, with links to view or duplicate it.
+3. **Duplicate Trip**: copies a Trip's *current* Trip Items (including custom additions, quantity overrides, and exclusions — i.e. what was actually packed/customized, not a re-run of module generation) and recreates its Bags (preserving item-to-bag assignment), into a new Trip. Packed status resets to unpacked; dates are not copied (a duplicate is presumably for a different future trip). New FR-058, UC-020.
+4. **"Compare trips" is explicitly out of scope for now** — DESIGN.md's original Trip History bullet named it with no further detail, and it's deferred to Future Enhancements rather than guessed at. Nothing about Trip History or Duplicate blocks adding it later.
 
 ---
 
@@ -163,7 +174,7 @@ Each generated Trip Item supports: Quantity Override, Packed, Removed from Trip,
 - **Master Items:** Create/edit items (category, default quantity, notes, parent/child relationships).
 - **Modules:** Create reusable packing modules.
 - **Categories:** Manage category names and display order.
-- **Trip History:** Duplicate trip, review packing list, compare trips.
+- **Trip History:** Duplicate trip, review packing list. *(Implemented in 1.8; "compare trips" deferred — see Future Enhancements.)*
 - **Settings:** Theme, Backup, CSV Import & Export of master data (see Data Import & Export). *(Trip-level output in Version 1 is limited to the browser-printable checklist — see Print & Export; structured Trip export is deferred to the future REST API.)*
 
 ---
@@ -549,6 +560,7 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 - **FR-055** — CSV import shall validate the entire file and present a row-level preview before committing, rejecting the import as a whole if any row fails validation (including unresolved child references, invalid quantities, and parent/child cycles). *(1.2.)*
 - **FR-056** — The application shall support backup and restoration using PostgreSQL backup utilities and Docker volume backup.
 - **FR-057** — The application shall support exporting master data (Categories, Items — including parent/child relationships and default quantities —, and Modules with membership) to the CSV format defined in Data Import & Export (CSV), for backup and migration purposes. *(1.4.)*
+- **FR-058** — Users shall be able to duplicate a Trip. The duplicate shall copy the source Trip's current (non-removed) Trip Items — including custom additions, quantity overrides, and any exclusions — and recreate its Bags with item-to-bag assignments preserved. Packed status shall reset to unpacked on the duplicate; Trip dates shall not be copied. *(1.8.)*
 
 ---
 
@@ -668,11 +680,17 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 **System response:** `ExportService` reads the user's Categories, Items (with parent/child links), and Modules (with membership) and writes them to the same one-row-per-Item CSV shape used for import.
 **Result:** A CSV file suitable for backup, offline editing, or migrating master data to another instance; re-importing it unchanged is a no-op.
 
+### UC-020 — Duplicate a Trip
+**Actor:** User. **Scenario:** The user is planning a trip similar to one they've taken before and wants to start from what they actually packed last time, not regenerate from scratch.
+**Flow:** Trip History (or the Trip detail page) → Duplicate → confirm/edit the new trip's name, destination, and dates → Create duplicate.
+**System response:** `TripService.duplicateTrip` copies the source Trip's current Trip Items (custom additions, quantity overrides, and exclusions all preserved) and recreates its Bags with assignments intact, into a new Trip with packed status reset.
+**Result:** A new Trip ready to pack from, without losing the customization built up on the original.
+
 ---
 
 ## Future Enhancements
 
-**General:** Weight tracking per item and per bag; suitcase assignment weight totals; barcode/QR inventory; weather-based recommendations; cloud sync; mobile offline mode; printable checklist refinements; AI recommendations based on destination, season, and itinerary.
+**General:** Weight tracking per item and per bag; suitcase assignment weight totals; barcode/QR inventory; weather-based recommendations; cloud sync; mobile offline mode; printable checklist refinements; AI recommendations based on destination, season, and itinerary; **comparing two Trips' packing lists side by side** (named in the original Trip History concept but deferred in 1.8 pending a clearer spec of what "compare" should show).
 
 **Bags:** Automatic estimated bag weight from item weights; remaining-weight indicator before airline limits; warnings when restricted items (e.g., lithium batteries) are assigned to checked luggage; drag-and-drop between bags; duplicate bag templates.
 

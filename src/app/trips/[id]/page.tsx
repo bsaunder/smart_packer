@@ -40,6 +40,7 @@ import {
   visibleTripItems,
   type ViewParams,
 } from "@/lib/packingListView";
+import { formatDateRange } from "@/lib/formatDate";
 
 const UNASSIGNED = "unassigned";
 
@@ -63,6 +64,7 @@ export default async function TripDetailPage({
 
   if (!trip) notFound();
 
+  const dateRange = formatDateRange(trip.startDate, trip.endDate);
   const allCategories = allCategoriesOf(trip);
   const groups = groupTripItems(visibleTripItems(trip, parsed), view);
   const basePath = `/trips/${trip.id}`;
@@ -77,13 +79,20 @@ export default async function TripDetailPage({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{trip.name}</h1>
-          {trip.destination && (
-            <p className="text-muted-foreground">{trip.destination}</p>
+          {(trip.destination || dateRange) && (
+            <p className="text-muted-foreground">
+              {[trip.destination, dateRange].filter(Boolean).join(" — ")}
+            </p>
           )}
         </div>
-        <Button asChild variant="outline">
-          <Link href={printLink}>Print</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href={`/trips/${trip.id}/duplicate`}>Duplicate</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={printLink}>Print</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-sm">

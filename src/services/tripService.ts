@@ -8,6 +8,28 @@ export async function listTrips(ownerId: string) {
   });
 }
 
+/** For Trip History: every trip, most recently dated first, with item/packed counts. */
+export async function listTripsForHistory(ownerId: string) {
+  const trips = await prisma.trip.findMany({
+    where: { ownerId },
+    include: {
+      tripItems: { where: { removed: false }, select: { packed: true } },
+    },
+  });
+
+  return trips
+    .map((t) => ({
+      ...t,
+      itemCount: t.tripItems.length,
+      packedCount: t.tripItems.filter((ti) => ti.packed).length,
+    }))
+    .sort((a, b) => {
+      const aDate = a.endDate ?? a.startDate ?? a.createdAt;
+      const bDate = b.endDate ?? b.startDate ?? b.createdAt;
+      return bDate.getTime() - aDate.getTime();
+    });
+}
+
 export async function getTrip(ownerId: string, tripId: string) {
   return prisma.trip.findFirst({
     where: { id: tripId, ownerId },
@@ -35,6 +57,74 @@ export async function createTrip(
       startDate: input.startDate,
       endDate: input.endDate,
     },
+  });
+}
+
+/**
+ * Duplicates a Trip: copies its current (non-removed) Trip Items — as
+ * actually packed, including custom additions, quantity overrides, and
+ * exclusions — and its Bags, into a new Trip. Packed status resets to
+ * unpacked; dates are not copied (a duplicate is presumably for a future
+ * trip with its own dates). Bag assignments are preserved by recreating
+ * each Bag under the new Trip and remapping.
+ */
+export async function duplicateTrip(
+  ownerId: string,
+  sourceTripId: string,
+  input: { name: string; destination?: string; startDate?: Date; endDate?: Date }
+) {
+  const source = await prisma.trip.findFirst({
+    where: { id: sourceTripId, ownerId },
+    include: {
+      bags: true,
+      tripItems: { where: { removed: false } },
+    },
+  });
+  if (!source) throw new Error("Trip not found for this owner.");
+
+  return prisma.$transaction(async (tx) => {
+    const newTrip = await tx.trip.create({
+      data: {
+        ownerId,
+        name: input.name,
+        destination: input.destination,
+        startDate: input.startDate,
+        endDate: input.endDate,
+      },
+    });
+
+    const bagIdMap = new Map<string, string>();
+    for (const bag of source.bags) {
+      const newBag = await tx.bag.create({
+        data: {
+          tripId: newTrip.id,
+          name: bag.name,
+          bagType: bag.bagType,
+          color: bag.color,
+          weightLimit: bag.weightLimit,
+        },
+      });
+      bagIdMap.set(bag.id, newBag.id);
+    }
+
+    if (source.tripItems.length > 0) {
+      await tx.tripItem.createMany({
+        data: source.tripItems.map((item) => ({
+          tripId: newTrip.id,
+          sourceItemId: item.sourceItemId,
+          name: item.name,
+          category: item.category,
+          notes: item.notes,
+          quantity: item.quantity,
+          quantityOverride: item.quantityOverride,
+          tripNotes: item.tripNotes,
+          bagId: item.bagId ? (bagIdMap.get(item.bagId) ?? null) : null,
+          packed: false,
+        })),
+      });
+    }
+
+    return newTrip;
   });
 }
 
