@@ -40,6 +40,8 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) and sign in with the `ADMIN_USERNAME`/`ADMIN_PASSWORD` from `.env`. Steps 2–3 only need to be repeated when you reset the database; day-to-day you just need `docker compose up -d db` running and `pnpm dev`.
 
+There's no self-service signup — accounts are admin-created. The seeded admin can create further users (and deactivate/reactivate users, or reset anyone's password) from **Admin** in the nav, at `/admin/users`.
+
 ### Alternative: run the whole stack in Docker (production / self-hosted deployment)
 
 ```bash

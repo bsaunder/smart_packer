@@ -1,7 +1,18 @@
 # Smart Packing Planner — Design & Requirements Document
 
-**Version:** 1.9
-**Supersedes:** 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+**Version:** 1.10
+**Supersedes:** 1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+
+---
+
+## Revision Summary (1.9 → 1.10)
+
+This revision completes FR-052: an admin UI for creating, deactivating, and password-resetting users beyond the 1.9 first-run bootstrap admin.
+
+1. **`/admin/users`** (admin-only, redirects non-admins to the Dashboard via a new `getCurrentAdmin()` in `src/lib/session.ts`): create a user (username, initial password, optional admin flag), toggle active/inactive per user, reset any user's password. Reuses `userService.createUser` — the same direct-Prisma-plus-Argon2id function the 1.9 seed script uses, now shared between both (seed.ts was refactored to call it rather than duplicate the logic).
+2. **Deactivation now actually blocks access**, not just a cosmetic flag: `isAdmin`/`isActive` are registered as `user.additionalFields` in `src/lib/auth.ts` so they ride along on the session (no extra query needed to check them), a `databaseHooks.session.create.before` hook rejects new sign-ins for an inactive user with a clean 403 ("This account has been deactivated."), and `getCurrentUser()` separately re-checks `isActive` on every request so a user deactivated mid-session is cut off before their existing session cookie expires, not just blocked from signing in again.
+3. **An admin cannot deactivate their own account** (`userService.setUserActive` throws) — a deliberate guard against self-lockout mid-session, since there's no other account guaranteed to still have access.
+4. **Still not built**: this remains the direct-Prisma pattern from 1.9, not Better Auth's `admin` plugin (role-based permissions, ban/unban, impersonation) — that plugin is a bigger schema and scope commitment (a `role` field/`adminRoles` config) that Version 1's single-admin-role model doesn't need yet. Revisit if roles beyond "admin" and "standard user" become necessary.
 
 ---
 
@@ -189,6 +200,7 @@ Each generated Trip Item supports: Quantity Override, Packed, Removed from Trip,
 - **Categories:** Manage category names and display order.
 - **Trip History:** Duplicate trip, review packing list. *(Implemented in 1.8; "compare trips" deferred — see Future Enhancements.)*
 - **Settings:** Theme, Backup, CSV Import & Export of master data (see Data Import & Export). *(Trip-level output in Version 1 is limited to the browser-printable checklist — see Print & Export; structured Trip export is deferred to the future REST API.)*
+- **Admin (`/admin/users`, admin-only):** Create users, deactivate/reactivate users, reset passwords. *(Implemented in 1.10 — see Account provisioning and Revision Summary 1.9 → 1.10.)*
 
 ---
 
@@ -566,7 +578,7 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 - **FR-049** — The application shall support multiple authenticated users using a maintained authentication framework (**Better Auth**). Custom, from-scratch session or password logic is prohibited. *(1.1; primary/alternative swapped in 1.3; implemented in 1.9.)*
 - **FR-050** — Passwords shall be hashed with a vetted, salted, memory-hard algorithm (Argon2id preferred). *(1.1; implemented in 1.9 via `@node-rs/argon2`.)*
 - **FR-051** — Authorization shall be enforced server-side in route handlers/service layer and shall not rely solely on Next.js middleware (CVE-2025-29927). Each user shall access **only their own data**; no data (Categories, Items, Modules, Trips, Bags, packing lists) shall be shared with or visible to any other user. *(1.2: sharing removed; 1.9: implemented — `getCurrentUser()` is the enforcement point, `src/proxy.ts` is a UX-only optimistic redirect.)*
-- **FR-052** — User accounts shall be created by an administrator; the application shall not provide self-service signup. The application shall support admin-driven user creation, deactivation, and password reset, and a first-run mechanism to create the initial administrator. *(1.2; first-run bootstrap implemented in 1.9 via the seed script — see Revision Summary 1.8 → 1.9. Ongoing admin UI for creating/deactivating/resetting *additional* users beyond the bootstrap admin remains unbuilt.)*
+- **FR-052** — User accounts shall be created by an administrator; the application shall not provide self-service signup. The application shall support admin-driven user creation, deactivation, and password reset, and a first-run mechanism to create the initial administrator. *(1.2; first-run bootstrap implemented in 1.9. Full admin UI — create/deactivate/reset-password for users beyond the bootstrap admin, at `/admin/users` — implemented in 1.10; see Revision Summary 1.9 → 1.10.)*
 - **FR-053** — The application shall support importing master data (Categories, Items, Modules, and parent/child relationships) from a single UTF-8 CSV file with one row per Item, as defined in Data Import (CSV). *(1.2.)*
 - **FR-054** — CSV import shall auto-create referenced Categories and Modules by name, upsert Items by name (merging module memberships and children on re-import), and process the file within a single transaction scoped to the importing user. *(1.2.)*
 - **FR-055** — CSV import shall validate the entire file and present a row-level preview before committing, rejecting the import as a whole if any row fails validation (including unresolved child references, invalid quantities, and parent/child cycles). *(1.2.)*
@@ -659,11 +671,11 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 **Flow:** Open the application → redirected to `/login` (no session cookie) → enter username and password → Better Auth validates the credentials server-side, against the Argon2id hash in `Account.password` → session cookie set → Dashboard loads.
 **Result:** The user has access only to their own resources. Verified: correct credentials issue a session and unlock every page; incorrect credentials return 401; a direct `POST` to the sign-up endpoint is rejected regardless of a UI existing for it.
 
-### UC-015a — Administer Users (Partially implemented — first-run bootstrap only, in 1.9)
+### UC-015a — Administer Users (Implemented in 1.9/1.10)
 **Actor:** Administrator.
-**Flow (first-run bootstrap, implemented):** Deploy with `ADMIN_USERNAME`/`ADMIN_PASSWORD` set → the `migrate` container's seed step creates the initial admin (User + credential Account row) if no users exist yet.
-**Flow (ongoing admin UI — not yet built):** Open user administration → create a new user with username and initial password (or deactivate an existing user, or reset a user's password).
-**Result:** The new user can log in; each user's data remains fully isolated from every other user's. The bootstrap half of this is real; the ongoing admin-UI half is still the "admin user management" gap.
+**Flow (first-run bootstrap, 1.9):** Deploy with `ADMIN_USERNAME`/`ADMIN_PASSWORD` set → the `migrate` container's seed step creates the initial admin (User + credential Account row) if no users exist yet.
+**Flow (ongoing admin UI, 1.10):** `/admin/users` → create a new user with username, initial password, and optional admin flag; or toggle an existing user active/inactive; or set a new password for any user.
+**Result:** The new user can log in; each user's data remains fully isolated from every other user's. A deactivated user is rejected at their next sign-in attempt (clean 403) and, if already signed in, loses access on their very next request — not just blocked from future logins. An admin cannot deactivate their own account. Verified against a real Postgres instance and a fully containerized deploy: create/deactivate/reactivate/reset-password, the self-deactivation guard, and both deactivation-enforcement paths (new sign-in blocked, existing session cut off) all behave correctly.
 
 ### UC-016a — Add a Module to an Existing Trip
 **Actor:** User. **Scenario:** A user forgot to include the "Camera" Module when generating a Trip (or the Module did not exist yet).

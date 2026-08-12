@@ -75,9 +75,13 @@ ENV NODE_ENV=production
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=builder /app/src/generated ./src/generated
+# prisma/seed.ts imports app code (@/lib/prisma, @/services/userService) via
+# the "@/*" tsconfig path alias that tsx resolves at runtime -- both the
+# source tree and tsconfig.json (not just src/generated) have to be here,
+# or tsx can't find the alias target at all.
+COPY --from=builder /app/src ./src
 COPY --from=builder /app/prisma ./prisma
-COPY package.json prisma.config.ts docker-migrate.sh ./
+COPY package.json tsconfig.json prisma.config.ts docker-migrate.sh ./
 RUN chmod +x docker-migrate.sh
 
 CMD ["./docker-migrate.sh"]
