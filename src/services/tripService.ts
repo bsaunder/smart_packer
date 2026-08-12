@@ -30,6 +30,39 @@ export async function listTripsForHistory(ownerId: string) {
     });
 }
 
+/**
+ * For the Dashboard: trips split into upcoming (soonest first) and
+ * previous (most recent first), by endDate ?? startDate compared to today.
+ * A trip with neither date set is treated as upcoming (still being
+ * planned, not yet known to be in the past).
+ */
+export async function getDashboardTripBuckets(ownerId: string) {
+  const trips = await listTripsForHistory(ownerId);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const upcoming = trips
+    .filter((t) => {
+      const relevant = t.endDate ?? t.startDate;
+      return !relevant || relevant.getTime() >= today.getTime();
+    })
+    .sort((a, b) => {
+      // Undated trips sort last (soonest-first order is meaningless for
+      // them) rather than by createdAt, which would place a trip created
+      // "just now" ahead of one genuinely scheduled for next week.
+      const aDate = (a.endDate ?? a.startDate)?.getTime() ?? Infinity;
+      const bDate = (b.endDate ?? b.startDate)?.getTime() ?? Infinity;
+      return aDate - bDate;
+    });
+
+  const previous = trips.filter((t) => {
+    const relevant = t.endDate ?? t.startDate;
+    return relevant && relevant.getTime() < today.getTime();
+  });
+
+  return { upcoming, previous };
+}
+
 export async function getTrip(ownerId: string, tripId: string) {
   return prisma.trip.findFirst({
     where: { id: tripId, ownerId },

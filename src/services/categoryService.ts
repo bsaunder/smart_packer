@@ -7,6 +7,10 @@ export async function listCategories(ownerId: string) {
   });
 }
 
+export async function countCategories(ownerId: string) {
+  return prisma.category.count({ where: { ownerId } });
+}
+
 export async function createCategory(
   ownerId: string,
   input: { name: string }

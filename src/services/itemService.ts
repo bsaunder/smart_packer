@@ -11,6 +11,10 @@ export async function listItems(ownerId: string) {
   });
 }
 
+export async function countItems(ownerId: string) {
+  return prisma.item.count({ where: { ownerId } });
+}
+
 export async function getItem(ownerId: string, itemId: string) {
   return prisma.item.findFirst({
     where: { id: itemId, ownerId },

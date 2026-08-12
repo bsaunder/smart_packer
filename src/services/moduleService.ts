@@ -9,6 +9,10 @@ export async function listModules(ownerId: string) {
   });
 }
 
+export async function countModules(ownerId: string) {
+  return prisma.module.count({ where: { ownerId } });
+}
+
 export async function createModule(ownerId: string, input: { name: string }) {
   return prisma.module.create({
     data: { ownerId, name: input.name },
