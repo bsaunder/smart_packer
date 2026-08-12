@@ -61,6 +61,62 @@ Note on image size: the `migrate` image is intentionally larger than `app` (it b
 
 Built with [Next.js](https://nextjs.org) (App Router), TypeScript, Tailwind CSS, shadcn/ui, Prisma, and PostgreSQL. See DESIGN.md for the full architecture.
 
+## Backup & Restore
+
+All application data lives in the `db` container's PostgreSQL volume — the `app`/`migrate` containers themselves are stateless and disposable. Two backup approaches both work; pick one. Both were tested end-to-end (backup → wipe the volume entirely → restore → data intact) while writing this doc.
+
+Also back up `.env` — it's not in the database, and losing `AUTH_SECRET` invalidates every existing session (everyone has to sign in again; not data loss, but worth keeping alongside your backups regardless).
+
+### Option A: `pg_dump` (recommended — small, portable, human-readable)
+
+**Backup** (the container must be running):
+
+```bash
+docker compose exec db pg_dump -U packer -d smart_packer > backup.sql
+```
+
+**Restore** into a running (typically freshly-created, empty) database:
+
+```bash
+cat backup.sql | docker compose exec -T db psql -U packer -d smart_packer
+```
+
+If restoring into a database that already has data in it, drop and recreate it first so the restore starts clean:
+
+```bash
+docker compose exec db psql -U packer -d postgres -c "DROP DATABASE smart_packer;"
+docker compose exec db psql -U packer -d postgres -c "CREATE DATABASE smart_packer;"
+cat backup.sql | docker compose exec -T db psql -U packer -d smart_packer
+```
+
+### Option B: Docker volume backup (full byte-for-byte copy, including PostgreSQL's own files)
+
+**Backup** (stop `db` first for a consistent snapshot — an in-use volume can still be tarred, but a stopped one guarantees no mid-write files):
+
+```bash
+docker compose stop db
+docker run --rm -v smart_packer_db-data:/data -v "$(pwd)":/backup alpine \
+  tar czf /backup/db-data-backup.tar.gz -C /data .
+docker compose start db
+```
+
+**Restore**, into a fresh volume (recommended sequence — let Compose create and own the volume first, then populate it, rather than pre-creating the volume yourself, which Compose will warn about not recognizing):
+
+```bash
+docker compose down          # remove containers; add -v first if the volume needs to be emptied
+docker compose up -d db      # recreates the (empty) named volume if it doesn't exist
+docker compose stop db
+docker run --rm -v smart_packer_db-data:/data -v "$(pwd)":/backup alpine \
+  sh -c "rm -rf /data/* && tar xzf /backup/db-data-backup.tar.gz -C /data"
+docker compose start db
+```
+
+(Windows + Git Bash: `docker run` with a `-v` mount starting in `/` can get mangled by MSYS's automatic path conversion — prefix the command with `MSYS_NO_PATHCONV=1` if the container reports it can't find `/backup`. Not needed on Linux/macOS deployment hosts.)
+
+### Which to use
+
+`pg_dump` is the better default: it's a portable SQL text file (readable, diffable, works across PostgreSQL versions), and it's what was used above to verify Options A and B both actually restore correctly. The volume backup is a reasonable belt-and-suspenders addition for a full-server migration, since it also captures anything Postgres itself keeps outside the logical data (though this app doesn't currently rely on anything at that level).
+
 ## CSV Import & Export
 
 Master data — Categories, Items (including parent/child relationships and default quantities), and Modules (including membership) — can be imported and exported as a single CSV file from **Settings**. Trips, Trip Items, and Bags are never part of this file; they're runtime data generated from master data, not migrated directly.
