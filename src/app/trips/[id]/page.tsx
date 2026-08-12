@@ -8,27 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  togglePackedAction,
-  updateQuantityAction,
-  removeItemAction,
   addCustomItemAction,
   addModulesToTripAction,
-  assignBagAction,
   createBagAction,
   deleteBagAction,
 } from "./actions";
@@ -41,8 +22,7 @@ import {
   type ViewParams,
 } from "@/lib/packingListView";
 import { formatDateRange } from "@/lib/formatDate";
-
-const UNASSIGNED = "unassigned";
+import { PackingList } from "./packing-list";
 
 export default async function TripDetailPage({
   params,
@@ -151,113 +131,7 @@ export default async function TripDetailPage({
         </div>
       </div>
 
-      {groups.size === 0 ? (
-        <p className="text-muted-foreground">
-          No items match — generate this trip from a module, add a custom
-          item below, or adjust the filter above.
-        </p>
-      ) : (
-        [...groups.entries()].map(([groupName, groupItems]) => (
-          <div key={groupName} className="flex flex-col gap-2">
-            <h2 className="text-lg font-medium">{groupName}</h2>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10">Packed</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead className="w-32">Quantity</TableHead>
-                  <TableHead className="w-40">Bag</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead className="w-20" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {groupItems.map((item) => {
-                  const quantity = item.quantityOverride ?? item.quantity;
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <form action={togglePackedAction}>
-                          <input type="hidden" name="tripItemId" value={item.id} />
-                          <input type="hidden" name="tripId" value={trip.id} />
-                          <input
-                            type="hidden"
-                            name="packed"
-                            value={(!item.packed).toString()}
-                          />
-                          <Button
-                            type="submit"
-                            size="sm"
-                            variant={item.packed ? "default" : "outline"}
-                            aria-pressed={item.packed}
-                          >
-                            {item.packed ? "Packed" : "Pack"}
-                          </Button>
-                        </form>
-                      </TableCell>
-                      <TableCell className={item.packed ? "text-muted-foreground line-through" : ""}>
-                        {item.name}
-                      </TableCell>
-                      <TableCell>
-                        <form action={updateQuantityAction} className="flex items-center gap-2">
-                          <input type="hidden" name="tripItemId" value={item.id} />
-                          <input type="hidden" name="tripId" value={trip.id} />
-                          <Input
-                            name="quantity"
-                            type="number"
-                            min={0}
-                            defaultValue={quantity}
-                            className="h-8 w-16"
-                          />
-                          <Button type="submit" size="sm" variant="ghost">
-                            Set
-                          </Button>
-                        </form>
-                      </TableCell>
-                      <TableCell>
-                        <form action={assignBagAction} className="flex items-center gap-2">
-                          <input type="hidden" name="tripItemId" value={item.id} />
-                          <input type="hidden" name="tripId" value={trip.id} />
-                          <Select
-                            key={item.bagId ?? UNASSIGNED}
-                            name="bagId"
-                            defaultValue={item.bagId ?? UNASSIGNED}
-                          >
-                            <SelectTrigger className="h-8 w-32">
-                              <SelectValue placeholder="Unassigned" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
-                              {trip.bags.map((bag) => (
-                                <SelectItem key={bag.id} value={bag.id}>
-                                  {bag.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button type="submit" size="sm" variant="ghost">
-                            Set
-                          </Button>
-                        </form>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{item.notes}</TableCell>
-                      <TableCell>
-                        <form action={removeItemAction}>
-                          <input type="hidden" name="tripItemId" value={item.id} />
-                          <input type="hidden" name="tripId" value={trip.id} />
-                          <Button type="submit" size="sm" variant="ghost">
-                            Remove
-                          </Button>
-                        </form>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        ))
-      )}
+      <PackingList groups={[...groups.entries()]} bags={trip.bags} tripId={trip.id} />
 
       <div className="grid gap-6 sm:grid-cols-2">
         <form action={addCustomItemAction} className="flex flex-col gap-3 rounded-lg border p-4">
