@@ -6,11 +6,13 @@ import {
   addCustomTripItem,
   addModulesToTrip,
   removeTripItem,
+  saveTripItemToMasterList,
   setTripItemBag,
   setTripItemPacked,
   setTripItemQuantity,
 } from "@/services/tripService";
 import { createBag, deleteBag } from "@/services/bagService";
+import { findOrCreateCategoryByName } from "@/services/categoryService";
 
 export async function togglePackedAction(formData: FormData) {
   const user = await getCurrentUser();
@@ -52,7 +54,18 @@ export async function addCustomItemAction(formData: FormData) {
   const quantity = Number(formData.get("quantity") ?? 1) || 1;
   if (!tripId || !name) return;
 
+  await findOrCreateCategoryByName(user.id, category);
   await addCustomTripItem(user.id, tripId, { name, category, quantity });
+  revalidatePath(`/trips/${tripId}`);
+}
+
+export async function saveToMasterListAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const tripItemId = String(formData.get("tripItemId") ?? "");
+  const tripId = String(formData.get("tripId") ?? "");
+  if (!tripItemId) return;
+
+  await saveTripItemToMasterList(user.id, tripItemId);
   revalidatePath(`/trips/${tripId}`);
 }
 

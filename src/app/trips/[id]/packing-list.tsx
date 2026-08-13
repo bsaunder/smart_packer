@@ -25,6 +25,7 @@ import {
   updateQuantityAction,
   removeItemAction,
   assignBagAction,
+  saveToMasterListAction,
 } from "./actions";
 
 const UNASSIGNED = "unassigned";
@@ -105,7 +106,7 @@ export function PackingList({
                       <TableHead className="w-32">Quantity</TableHead>
                       <TableHead className="w-40">Bag</TableHead>
                       <TableHead>Notes</TableHead>
-                      <TableHead className="w-20" />
+                      <TableHead className="w-36" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -170,7 +171,16 @@ export function PackingList({
                             </form>
                           </TableCell>
                           <TableCell className="text-muted-foreground">{item.notes}</TableCell>
-                          <TableCell>
+                          <TableCell className="flex items-center gap-1">
+                            {!item.sourceItemId && (
+                              <form action={saveToMasterListAction}>
+                                <input type="hidden" name="tripItemId" value={item.id} />
+                                <input type="hidden" name="tripId" value={tripId} />
+                                <Button type="submit" size="sm" variant="ghost" title="Save this item to your master Items list for reuse on future trips">
+                                  Save to Items
+                                </Button>
+                              </form>
+                            )}
                             <form action={removeItemAction}>
                               <input type="hidden" name="tripItemId" value={item.id} />
                               <input type="hidden" name="tripId" value={tripId} />

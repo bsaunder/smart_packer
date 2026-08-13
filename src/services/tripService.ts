@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getDescendantIds } from "@/services/itemService";
+import { findOrCreateCategoryByName } from "@/services/categoryService";
 
 export async function listTrips(ownerId: string) {
   return prisma.trip.findMany({
@@ -258,6 +259,41 @@ export async function addCustomTripItem(
       quantity: input.quantity ?? 1,
       notes: input.notes,
     },
+  });
+}
+
+/**
+ * Links a custom (not module-sourced) trip item to a master Item so it can
+ * be reused on future trips — creating that Item (and its Category) if one
+ * doesn't already exist by name, or linking to the existing one otherwise.
+ * The trip item itself is left as-is (still a snapshot per FR-014a).
+ */
+export async function saveTripItemToMasterList(ownerId: string, tripItemId: string) {
+  const tripItem = await prisma.tripItem.findFirst({
+    where: { id: tripItemId, trip: { ownerId } },
+  });
+  if (!tripItem) throw new Error("Trip item not found for this owner.");
+  if (tripItem.sourceItemId) return tripItem;
+
+  const existingItem = await prisma.item.findUnique({
+    where: { ownerId_name: { ownerId, name: tripItem.name } },
+  });
+
+  const item =
+    existingItem ??
+    (await prisma.item.create({
+      data: {
+        ownerId,
+        name: tripItem.name,
+        categoryId: (await findOrCreateCategoryByName(ownerId, tripItem.category)).id,
+        defaultQuantity: tripItem.quantity,
+        notes: tripItem.notes,
+      },
+    }));
+
+  return prisma.tripItem.update({
+    where: { id: tripItemId },
+    data: { sourceItemId: item.id },
   });
 }
 

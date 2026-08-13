@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { getTrip } from "@/services/tripService";
 import { listModules } from "@/services/moduleService";
+import { listCategories } from "@/services/categoryService";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -37,9 +38,10 @@ export default async function TripDetailPage({
   const { view, filter, scope, scopeType, scopeValue } = parsed;
 
   const user = await getCurrentUser();
-  const [trip, modules] = await Promise.all([
+  const [trip, modules, categories] = await Promise.all([
     getTrip(user.id, id),
     listModules(user.id),
+    listCategories(user.id),
   ]);
 
   if (!trip) notFound();
@@ -143,7 +145,12 @@ export default async function TripDetailPage({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="category">Category</Label>
-            <Input id="category" name="category" placeholder="Miscellaneous" />
+            <Input id="category" name="category" placeholder="Miscellaneous" list="category-options" />
+            <datalist id="category-options">
+              {categories.map((c) => (
+                <option key={c.id} value={c.name} />
+              ))}
+            </datalist>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="quantity">Quantity</Label>
