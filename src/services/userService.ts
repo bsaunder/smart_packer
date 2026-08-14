@@ -15,7 +15,11 @@ export async function createUser(input: { username: string; password: string; is
   const user = await prisma.user.create({
     data: {
       id: randomUUID(),
-      username: input.username,
+      // Better Auth's username plugin normalizes to lowercase on lookup
+      // (and on write, when going through its own API) -- this bypasses
+      // that API, so it must normalize the same way here or sign-in can
+      // never find a user whose typed username wasn't already lowercase.
+      username: input.username.toLowerCase(),
       displayUsername: input.username,
       name: input.username,
       // Better Auth's core schema requires an email even though this app

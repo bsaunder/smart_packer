@@ -44,7 +44,7 @@ export default async function AdminUsersPage() {
           {users.map((u) => (
             <TableRow key={u.id}>
               <TableCell>
-                {u.username}
+                {u.displayUsername ?? u.username}
                 {u.id === admin.id && <span className="text-muted-foreground"> (you)</span>}
               </TableCell>
               <TableCell className="text-muted-foreground">{u.isAdmin ? "Admin" : "User"}</TableCell>
