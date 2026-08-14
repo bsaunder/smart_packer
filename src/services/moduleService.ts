@@ -52,6 +52,21 @@ export async function addItemToModule(
   return { added: newIds };
 }
 
+export async function renameModule(ownerId: string, moduleId: string, name: string) {
+  const owned = await prisma.module.count({ where: { id: moduleId, ownerId } });
+  if (!owned) throw new Error("Module not found for this owner.");
+
+  return prisma.module.update({ where: { id: moduleId }, data: { name } });
+}
+
+/** ModuleItem rows cascade automatically (onDelete: Cascade); the underlying Items are untouched. */
+export async function deleteModule(ownerId: string, moduleId: string) {
+  const owned = await prisma.module.count({ where: { id: moduleId, ownerId } });
+  if (!owned) throw new Error("Module not found for this owner.");
+
+  await prisma.module.delete({ where: { id: moduleId } });
+}
+
 export async function removeItemFromModule(
   ownerId: string,
   moduleId: string,

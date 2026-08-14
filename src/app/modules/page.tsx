@@ -15,8 +15,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { X } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createModuleAction, addItemToModuleAction, removeItemFromModuleAction } from "./actions";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import {
+  createModuleAction,
+  addItemToModuleAction,
+  removeItemFromModuleAction,
+  renameModuleAction,
+  deleteModuleAction,
+} from "./actions";
 
 export default async function ModulesPage() {
   const user = await getCurrentUser();
@@ -40,8 +47,24 @@ export default async function ModulesPage() {
       <div className="flex flex-col gap-4">
         {modules.map((m) => (
           <Card key={m.id}>
-            <CardHeader>
-              <CardTitle>{m.name}</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+              <form action={renameModuleAction} className="flex items-center gap-2">
+                <input type="hidden" name="moduleId" value={m.id} />
+                <Input name="name" defaultValue={m.name} className="h-8 w-56 text-base font-semibold" />
+                <Button type="submit" size="sm" variant="ghost">
+                  Save
+                </Button>
+              </form>
+              <form action={deleteModuleAction}>
+                <input type="hidden" name="moduleId" value={m.id} />
+                <ConfirmSubmitButton
+                  confirmMessage={`Delete module "${m.name}"? Its items are not affected.`}
+                  size="sm"
+                  variant="ghost"
+                >
+                  Delete
+                </ConfirmSubmitButton>
+              </form>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {m.moduleItems.length === 0 ? (

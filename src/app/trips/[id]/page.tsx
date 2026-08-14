@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/session";
 import { getTrip } from "@/services/tripService";
 import { listModules } from "@/services/moduleService";
 import { listCategories } from "@/services/categoryService";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { deleteTripAction } from "../actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,6 +15,7 @@ import {
   addModulesToTripAction,
   createBagAction,
   deleteBagAction,
+  updateBagAction,
 } from "./actions";
 import {
   allCategoriesOf,
@@ -69,11 +72,24 @@ export default async function TripDetailPage({
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline">
+            <Link href={`/trips/${trip.id}/edit`}>Edit</Link>
+          </Button>
+          <Button asChild variant="outline">
             <Link href={`/trips/${trip.id}/duplicate`}>Duplicate</Link>
           </Button>
           <Button asChild variant="outline">
             <Link href={printLink}>Print</Link>
           </Button>
+          <form action={deleteTripAction}>
+            <input type="hidden" name="tripId" value={trip.id} />
+            <ConfirmSubmitButton
+              confirmMessage={`Delete trip "${trip.name}"? This permanently removes all its items and bags.`}
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+            >
+              Delete
+            </ConfirmSubmitButton>
+          </form>
         </div>
       </div>
 
@@ -183,14 +199,40 @@ export default async function TripDetailPage({
       <div className="flex flex-col gap-3 rounded-lg border p-4">
         <h3 className="font-medium">Bags</h3>
         {trip.bags.length > 0 && (
-          <ul className="flex flex-col gap-1 text-sm">
+          <ul className="flex flex-col gap-2 text-sm">
             {trip.bags.map((bag) => (
-              <li key={bag.id} className="flex items-center gap-3">
-                <span>
-                  {bag.name}
-                  {bag.bagType ? ` (${bag.bagType})` : ""}
-                  {bag.weightLimit ? ` — limit ${bag.weightLimit}` : ""}
-                </span>
+              <li key={bag.id} className="flex flex-wrap items-end gap-2 border-b pb-2 last:border-b-0 last:pb-0">
+                <form action={updateBagAction} className="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="bagId" value={bag.id} />
+                  <input type="hidden" name="tripId" value={trip.id} />
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor={`bagName-${bag.id}`} className="text-xs">Name</Label>
+                    <Input id={`bagName-${bag.id}`} name="name" defaultValue={bag.name} required className="h-8 w-40" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor={`bagType-${bag.id}`} className="text-xs">Type</Label>
+                    <Input id={`bagType-${bag.id}`} name="bagType" defaultValue={bag.bagType ?? ""} className="h-8 w-28" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor={`bagColor-${bag.id}`} className="text-xs">Color</Label>
+                    <Input id={`bagColor-${bag.id}`} name="color" defaultValue={bag.color ?? ""} className="h-8 w-24" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor={`bagWeight-${bag.id}`} className="text-xs">Weight limit</Label>
+                    <Input
+                      id={`bagWeight-${bag.id}`}
+                      name="weightLimit"
+                      type="number"
+                      min={0}
+                      step="0.1"
+                      defaultValue={bag.weightLimit ?? ""}
+                      className="h-8 w-24"
+                    />
+                  </div>
+                  <Button type="submit" size="sm" variant="ghost">
+                    Save
+                  </Button>
+                </form>
                 <form action={deleteBagAction}>
                   <input type="hidden" name="bagId" value={bag.id} />
                   <input type="hidden" name="tripId" value={trip.id} />

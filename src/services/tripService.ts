@@ -94,6 +94,33 @@ export async function createTrip(
   });
 }
 
+export async function updateTrip(
+  ownerId: string,
+  tripId: string,
+  input: { name: string; destination?: string; startDate?: Date; endDate?: Date }
+) {
+  const existing = await prisma.trip.findFirst({ where: { id: tripId, ownerId } });
+  if (!existing) throw new Error("Trip not found for this owner.");
+
+  return prisma.trip.update({
+    where: { id: tripId },
+    data: {
+      name: input.name,
+      destination: input.destination ?? null,
+      startDate: input.startDate ?? null,
+      endDate: input.endDate ?? null,
+    },
+  });
+}
+
+/** Cascades to delete this Trip's TripItems and Bags (onDelete: Cascade). */
+export async function deleteTrip(ownerId: string, tripId: string) {
+  const existing = await prisma.trip.findFirst({ where: { id: tripId, ownerId } });
+  if (!existing) throw new Error("Trip not found for this owner.");
+
+  await prisma.trip.delete({ where: { id: tripId } });
+}
+
 /**
  * Duplicates a Trip: copies its current (non-removed) Trip Items — as
  * actually packed, including custom additions, quantity overrides, and

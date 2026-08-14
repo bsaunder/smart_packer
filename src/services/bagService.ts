@@ -28,6 +28,25 @@ export async function createBag(
   });
 }
 
+export async function updateBag(
+  ownerId: string,
+  bagId: string,
+  input: { name: string; bagType?: string; color?: string; weightLimit?: number }
+) {
+  const bag = await prisma.bag.findFirst({ where: { id: bagId, trip: { ownerId } } });
+  if (!bag) throw new Error("Bag not found for this owner.");
+
+  return prisma.bag.update({
+    where: { id: bagId },
+    data: {
+      name: input.name,
+      bagType: input.bagType || null,
+      color: input.color || null,
+      weightLimit: input.weightLimit ?? null,
+    },
+  });
+}
+
 /** Unassigns any Trip Items on this Bag (onDelete: SetNull) rather than removing them. */
 export async function deleteBag(ownerId: string, bagId: string) {
   const bag = await prisma.bag.findFirst({

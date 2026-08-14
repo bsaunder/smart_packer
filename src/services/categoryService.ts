@@ -4,6 +4,7 @@ export async function listCategories(ownerId: string) {
   return prisma.category.findMany({
     where: { ownerId },
     orderBy: { sortOrder: "asc" },
+    include: { _count: { select: { items: true } } },
   });
 }
 
@@ -38,6 +39,34 @@ export async function findOrCreateCategoryByName(
   });
   if (existing) return existing;
   return createCategory(ownerId, { name });
+}
+
+export async function updateCategory(
+  ownerId: string,
+  categoryId: string,
+  input: { name: string }
+) {
+  const existing = await prisma.category.findFirst({ where: { id: categoryId, ownerId } });
+  if (!existing) throw new Error("Category not found for this owner.");
+
+  return prisma.category.update({
+    where: { id: categoryId },
+    data: { name: input.name },
+  });
+}
+
+/** Items reference their Category with onDelete: Restrict, so a Category still in use can't be deleted. */
+export async function deleteCategory(ownerId: string, categoryId: string) {
+  const category = await prisma.category.findFirst({
+    where: { id: categoryId, ownerId },
+    include: { _count: { select: { items: true } } },
+  });
+  if (!category) throw new Error("Category not found for this owner.");
+  if (category._count.items > 0) {
+    throw new Error("Cannot delete a category that still has items. Reassign or delete its items first.");
+  }
+
+  await prisma.category.delete({ where: { id: categoryId } });
 }
 
 export async function reorderCategories(ownerId: string, orderedIds: string[]) {

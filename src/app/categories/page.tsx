@@ -15,7 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { createCategoryAction, moveCategoryAction } from "./actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { createCategoryAction, deleteCategoryAction, moveCategoryAction, updateCategoryAction } from "./actions";
 
 export default async function CategoriesPage() {
   const user = await getCurrentUser();
@@ -38,12 +39,21 @@ export default async function CategoriesPage() {
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead className="w-24 text-right">Order</TableHead>
+            <TableHead className="w-24" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {categories.map((c, index) => (
             <TableRow key={c.id}>
-              <TableCell>{c.name}</TableCell>
+              <TableCell>
+                <form action={updateCategoryAction} className="flex items-center gap-2">
+                  <input type="hidden" name="categoryId" value={c.id} />
+                  <Input name="name" defaultValue={c.name} className="h-8 w-48" />
+                  <Button type="submit" size="sm" variant="ghost">
+                    Save
+                  </Button>
+                </form>
+              </TableCell>
               <TableCell>
                 <div className="flex justify-end gap-1">
                   <form action={moveCategoryAction}>
@@ -74,11 +84,25 @@ export default async function CategoriesPage() {
                   </form>
                 </div>
               </TableCell>
+              <TableCell className="text-right">
+                <form action={deleteCategoryAction}>
+                  <input type="hidden" name="categoryId" value={c.id} />
+                  <ConfirmSubmitButton
+                    confirmMessage={`Delete category "${c.name}"?`}
+                    size="sm"
+                    variant="ghost"
+                    disabled={c._count.items > 0}
+                    title={c._count.items > 0 ? `Still used by ${c._count.items} item${c._count.items === 1 ? "" : "s"}` : undefined}
+                  >
+                    Delete
+                  </ConfirmSubmitButton>
+                </form>
+              </TableCell>
             </TableRow>
           ))}
           {categories.length === 0 && (
             <TableRow>
-              <TableCell colSpan={2} className="text-center text-muted-foreground">
+              <TableCell colSpan={3} className="text-center text-muted-foreground">
                 No categories yet.
               </TableCell>
             </TableRow>

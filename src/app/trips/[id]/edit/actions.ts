@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
-import { createTrip, deleteTrip, generatePackingList } from "@/services/tripService";
+import { updateTrip } from "@/services/tripService";
 
 function parseDateInput(raw: FormDataEntryValue | null): Date | undefined {
   const value = String(raw ?? "").trim();
@@ -12,32 +12,19 @@ function parseDateInput(raw: FormDataEntryValue | null): Date | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-export async function createTripAction(formData: FormData) {
+export async function updateTripAction(formData: FormData) {
   const user = await getCurrentUser();
+  const tripId = String(formData.get("tripId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const destination = String(formData.get("destination") ?? "").trim() || undefined;
   const startDate = parseDateInput(formData.get("startDate"));
   const endDate = parseDateInput(formData.get("endDate"));
-  const moduleIds = formData.getAll("moduleIds").map(String);
-  if (!name) return;
+  if (!tripId || !name) return;
 
-  const trip = await createTrip(user.id, { name, destination, startDate, endDate });
-  if (moduleIds.length > 0) {
-    await generatePackingList(user.id, trip.id, moduleIds);
-  }
-
-  revalidatePath("/trips");
-  redirect(`/trips/${trip.id}`);
-}
-
-export async function deleteTripAction(formData: FormData) {
-  const user = await getCurrentUser();
-  const tripId = String(formData.get("tripId") ?? "");
-  if (!tripId) return;
-
-  await deleteTrip(user.id, tripId);
+  await updateTrip(user.id, tripId, { name, destination, startDate, endDate });
 
   revalidatePath("/trips");
   revalidatePath("/trips/history");
-  redirect("/trips");
+  revalidatePath(`/trips/${tripId}`);
+  redirect(`/trips/${tripId}`);
 }

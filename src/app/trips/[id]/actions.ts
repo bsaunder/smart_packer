@@ -11,7 +11,7 @@ import {
   setTripItemPacked,
   setTripItemQuantity,
 } from "@/services/tripService";
-import { createBag, deleteBag } from "@/services/bagService";
+import { createBag, deleteBag, updateBag } from "@/services/bagService";
 import { findOrCreateCategoryByName } from "@/services/categoryService";
 
 export async function togglePackedAction(formData: FormData) {
@@ -100,6 +100,25 @@ export async function createBagAction(formData: FormData) {
   if (!tripId || !name) return;
 
   await createBag(user.id, tripId, {
+    name,
+    bagType: bagType || undefined,
+    color: color || undefined,
+    weightLimit: rawWeightLimit ? Number(rawWeightLimit) : undefined,
+  });
+  revalidatePath(`/trips/${tripId}`);
+}
+
+export async function updateBagAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const bagId = String(formData.get("bagId") ?? "");
+  const tripId = String(formData.get("tripId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const bagType = String(formData.get("bagType") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
+  const rawWeightLimit = String(formData.get("weightLimit") ?? "").trim();
+  if (!bagId || !name) return;
+
+  await updateBag(user.id, bagId, {
     name,
     bagType: bagType || undefined,
     color: color || undefined,

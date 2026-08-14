@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
-import { createCategory, moveCategory } from "@/services/categoryService";
+import { createCategory, deleteCategory, moveCategory, updateCategory } from "@/services/categoryService";
 
 export async function createCategoryAction(formData: FormData) {
   const user = await getCurrentUser();
@@ -10,6 +10,25 @@ export async function createCategoryAction(formData: FormData) {
   if (!name) return;
 
   await createCategory(user.id, { name });
+  revalidatePath("/categories");
+}
+
+export async function updateCategoryAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const categoryId = String(formData.get("categoryId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!categoryId || !name) return;
+
+  await updateCategory(user.id, categoryId, { name });
+  revalidatePath("/categories");
+}
+
+export async function deleteCategoryAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const categoryId = String(formData.get("categoryId") ?? "");
+  if (!categoryId) return;
+
+  await deleteCategory(user.id, categoryId);
   revalidatePath("/categories");
 }
 
