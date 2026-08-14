@@ -32,7 +32,7 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-lg border p-4">
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4 rounded-xl border bg-card p-6 text-left shadow-sm">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="username">Username</Label>
         <Input

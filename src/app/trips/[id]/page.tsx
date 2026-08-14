@@ -27,6 +27,14 @@ import {
 } from "@/lib/packingListView";
 import { formatDateRange } from "@/lib/formatDate";
 import { PackingList } from "./packing-list";
+import { cn } from "@/lib/utils";
+
+function pillClass(active: boolean) {
+  return cn(
+    "rounded-full px-3 py-1 font-medium transition-colors",
+    active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+  );
+}
 
 export default async function TripDetailPage({
   params,
@@ -63,7 +71,7 @@ export default async function TripDetailPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">{trip.name}</h1>
+          <h1 className="font-heading text-3xl font-semibold tracking-tight">{trip.name}</h1>
           {(trip.destination || dateRange) && (
             <p className="text-muted-foreground">
               {[trip.destination, dateRange].filter(Boolean).join(" — ")}
@@ -94,37 +102,35 @@ export default async function TripDetailPage({
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
-        <div className="flex gap-2">
-          <span className="text-muted-foreground">View:</span>
-          <Link href={viewLink("category")} className={view === "category" ? "font-medium" : "text-muted-foreground"}>
+        <div className="flex items-center gap-1 rounded-full bg-muted p-1">
+          <Link href={viewLink("category")} className={pillClass(view === "category")}>
             By Category
           </Link>
-          <Link href={viewLink("bag")} className={view === "bag" ? "font-medium" : "text-muted-foreground"}>
+          <Link href={viewLink("bag")} className={pillClass(view === "bag")}>
             By Bag
           </Link>
         </div>
-        <div className="flex gap-2">
-          <span className="text-muted-foreground">Filter:</span>
-          <Link href={filterLink("all")} className={filter === "all" ? "font-medium" : "text-muted-foreground"}>
+        <div className="flex items-center gap-1 rounded-full bg-muted p-1">
+          <Link href={filterLink("all")} className={pillClass(filter === "all")}>
             All
           </Link>
-          <Link href={filterLink("packed")} className={filter === "packed" ? "font-medium" : "text-muted-foreground"}>
+          <Link href={filterLink("packed")} className={pillClass(filter === "packed")}>
             Packed
           </Link>
-          <Link href={filterLink("unpacked")} className={filter === "unpacked" ? "font-medium" : "text-muted-foreground"}>
+          <Link href={filterLink("unpacked")} className={pillClass(filter === "unpacked")}>
             Unpacked
           </Link>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="text-muted-foreground">Show:</span>
-          <Link href={scopeLink("all")} className={scope === "all" ? "font-medium" : "text-muted-foreground"}>
+        <div className="flex flex-wrap items-center gap-1 rounded-full bg-muted p-1">
+          <span className="px-2 text-xs font-medium text-muted-foreground">Show:</span>
+          <Link href={scopeLink("all")} className={pillClass(scope === "all")}>
             All
           </Link>
           {allCategories.map((c) => (
             <Link
               key={`cat-${c}`}
               href={scopeLink(`category:${c}`)}
-              className={scopeType === "category" && scopeValue === c ? "font-medium" : "text-muted-foreground"}
+              className={pillClass(scopeType === "category" && scopeValue === c)}
             >
               {c}
             </Link>
@@ -133,7 +139,7 @@ export default async function TripDetailPage({
             <Link
               key={`bag-${bag.id}`}
               href={scopeLink(`bag:${bag.id}`)}
-              className={scopeType === "bag" && scopeValue === bag.id ? "font-medium" : "text-muted-foreground"}
+              className={pillClass(scopeType === "bag" && scopeValue === bag.id)}
             >
               {bag.name}
             </Link>
@@ -141,7 +147,7 @@ export default async function TripDetailPage({
           {trip.bags.length > 0 && (
             <Link
               href={scopeLink("bag:unassigned")}
-              className={scopeType === "bag" && scopeValue === "unassigned" ? "font-medium" : "text-muted-foreground"}
+              className={pillClass(scopeType === "bag" && scopeValue === "unassigned")}
             >
               Unassigned
             </Link>

@@ -32,7 +32,7 @@ export default async function Dashboard() {
     <div className="flex flex-col gap-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <h1 className="font-heading text-3xl font-semibold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">Signed in as {user.username}</p>
         </div>
         <Button asChild>
@@ -45,14 +45,14 @@ export default async function Dashboard() {
           <Card key={s.label}>
             <CardHeader className="gap-0 pb-0">
               <CardDescription>{s.label}</CardDescription>
-              <CardTitle className="text-3xl">{s.value}</CardTitle>
+              <CardTitle className="font-heading text-3xl text-primary">{s.value}</CardTitle>
             </CardHeader>
           </Card>
         ))}
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Upcoming Trips</h2>
+        <h2 className="font-heading text-lg font-semibold tracking-tight">Upcoming Trips</h2>
         {upcoming.length === 0 ? (
           <p className="text-muted-foreground">
             No upcoming trips.{" "}
@@ -67,7 +67,7 @@ export default async function Dashboard() {
               const dateRange = formatDateRange(t.startDate, t.endDate);
               return (
                 <Link key={t.id} href={`/trips/${t.id}`}>
-                  <Card className="transition-colors hover:bg-accent">
+                  <Card className="transition-all hover:-translate-y-0.5 hover:shadow-md">
                     <CardContent className="flex items-center justify-between gap-4">
                       <div>
                         <p className="font-medium">{t.name}</p>
@@ -91,7 +91,7 @@ export default async function Dashboard() {
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium">Previous Trips</h2>
+          <h2 className="font-heading text-lg font-semibold tracking-tight">Previous Trips</h2>
           <Link href="/trips/history" className="text-sm text-muted-foreground hover:text-foreground">
             View all →
           </Link>
@@ -104,7 +104,7 @@ export default async function Dashboard() {
               const dateRange = formatDateRange(t.startDate, t.endDate);
               return (
                 <Link key={t.id} href={`/trips/${t.id}`}>
-                  <Card className="transition-colors hover:bg-accent">
+                  <Card className="transition-all hover:-translate-y-0.5 hover:shadow-md">
                     <CardContent className="flex items-center justify-between gap-4">
                       <div>
                         <p className="font-medium">{t.name}</p>
@@ -128,7 +128,7 @@ export default async function Dashboard() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Link href="/items">
-          <Card className="transition-colors hover:bg-accent">
+          <Card className="transition-all hover:-translate-y-0.5 hover:shadow-md">
             <CardHeader>
               <CardTitle>Master Items</CardTitle>
               <CardDescription>Manage the reusable item catalog</CardDescription>
@@ -136,7 +136,7 @@ export default async function Dashboard() {
           </Card>
         </Link>
         <Link href="/modules">
-          <Card className="transition-colors hover:bg-accent">
+          <Card className="transition-all hover:-translate-y-0.5 hover:shadow-md">
             <CardHeader>
               <CardTitle>Modules</CardTitle>
               <CardDescription>Reusable trip-type packing bundles</CardDescription>
@@ -144,7 +144,7 @@ export default async function Dashboard() {
           </Card>
         </Link>
         <Link href="/categories">
-          <Card className="transition-colors hover:bg-accent">
+          <Card className="transition-all hover:-translate-y-0.5 hover:shadow-md">
             <CardHeader>
               <CardTitle>Categories</CardTitle>
               <CardDescription>Organize items for display</CardDescription>

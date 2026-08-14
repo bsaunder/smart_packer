@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { Luggage } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { SignOutButton } from "@/components/sign-out-button";
+import { NavLinks } from "@/components/nav-links";
 
 const links = [
   { href: "/", label: "Dashboard" },
@@ -27,18 +29,17 @@ export async function Nav() {
   const visibleLinks = signedIn && session!.user.isAdmin ? [...links, { href: "/admin/users", label: "Admin" }] : links;
 
   return (
-    <nav className="border-b bg-background">
+    <nav className="sticky top-0 z-10 border-b border-border/60 bg-background/85 backdrop-blur-sm">
       <div className="mx-auto flex max-w-4xl items-center gap-6 px-6 py-3">
-        <span className="font-semibold">Smart Packing Planner</span>
+        <Link href="/" className="flex items-center gap-2 font-heading font-semibold tracking-tight">
+          <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Luggage className="size-4" />
+          </span>
+          Smart Packing Planner
+        </Link>
         {signedIn && (
           <>
-            <div className="flex flex-1 gap-4 text-sm text-muted-foreground">
-              {visibleLinks.map((l) => (
-                <Link key={l.href} href={l.href} className="hover:text-foreground">
-                  {l.label}
-                </Link>
-              ))}
-            </div>
+            <NavLinks links={visibleLinks} />
             <span className="text-sm text-muted-foreground">{session!.user.username}</span>
             <SignOutButton />
           </>

@@ -22,7 +22,7 @@ export default async function TripsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Trips</h1>
+      <h1 className="font-heading text-3xl font-semibold tracking-tight">Trips</h1>
 
       <form action={createTripAction} className="flex flex-col gap-4 rounded-lg border p-4">
         <div className="flex flex-wrap items-end gap-3">
@@ -68,7 +68,7 @@ export default async function TripsPage() {
           const dateRange = formatDateRange(t.startDate, t.endDate);
           return (
             <Link key={t.id} href={`/trips/${t.id}`}>
-              <Card className="transition-colors hover:bg-accent">
+              <Card className="transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <CardHeader>
                   <CardTitle>{t.name}</CardTitle>
                   {(t.destination || dateRange) && (
