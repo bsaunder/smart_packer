@@ -23,11 +23,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import Link from "next/link";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import {
   createItemAction,
   createCategoryInlineAction,
   addChildAction,
   setItemActiveAction,
+  deleteItemAction,
 } from "./actions";
 
 export default async function ItemsPage() {
@@ -100,7 +102,7 @@ export default async function ItemsPage() {
             <TableHead>Notes</TableHead>
             <TableHead>Children</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="w-20" />
+            <TableHead className="w-32" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -127,10 +129,20 @@ export default async function ItemsPage() {
                   </Button>
                 </form>
               </TableCell>
-              <TableCell>
+              <TableCell className="flex items-center gap-1">
                 <Button asChild size="sm" variant="ghost">
                   <Link href={`/items/${item.id}/edit`}>Edit</Link>
                 </Button>
+                <form action={deleteItemAction}>
+                  <input type="hidden" name="itemId" value={item.id} />
+                  <ConfirmSubmitButton
+                    confirmMessage={`Delete item "${item.name}"? This also removes it from any modules and parent/child links.`}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    Delete
+                  </ConfirmSubmitButton>
+                </form>
               </TableCell>
             </TableRow>
           ))}

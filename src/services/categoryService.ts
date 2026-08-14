@@ -55,15 +55,23 @@ export async function updateCategory(
   });
 }
 
-/** Items reference their Category with onDelete: Restrict, so a Category still in use can't be deleted. */
+/**
+ * Items reference their Category with onDelete: Restrict, so any Items still
+ * in this Category are moved to (find-or-create) "Miscellaneous" first.
+ */
 export async function deleteCategory(ownerId: string, categoryId: string) {
   const category = await prisma.category.findFirst({
     where: { id: categoryId, ownerId },
     include: { _count: { select: { items: true } } },
   });
   if (!category) throw new Error("Category not found for this owner.");
+
   if (category._count.items > 0) {
-    throw new Error("Cannot delete a category that still has items. Reassign or delete its items first.");
+    const fallback = await findOrCreateCategoryByName(ownerId, "Miscellaneous");
+    if (fallback.id === categoryId) {
+      throw new Error("Cannot delete the Miscellaneous category while it still has items.");
+    }
+    await prisma.item.updateMany({ where: { categoryId }, data: { categoryId: fallback.id } });
   }
 
   await prisma.category.delete({ where: { id: categoryId } });

@@ -88,11 +88,13 @@ export default async function CategoriesPage() {
                 <form action={deleteCategoryAction}>
                   <input type="hidden" name="categoryId" value={c.id} />
                   <ConfirmSubmitButton
-                    confirmMessage={`Delete category "${c.name}"?`}
+                    confirmMessage={
+                      c._count.items > 0
+                        ? `Delete category "${c.name}"? Its ${c._count.items} item${c._count.items === 1 ? "" : "s"} will be moved to "Miscellaneous".`
+                        : `Delete category "${c.name}"?`
+                    }
                     size="sm"
                     variant="ghost"
-                    disabled={c._count.items > 0}
-                    title={c._count.items > 0 ? `Still used by ${c._count.items} item${c._count.items === 1 ? "" : "s"}` : undefined}
                   >
                     Delete
                   </ConfirmSubmitButton>

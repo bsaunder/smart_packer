@@ -62,6 +62,18 @@ export async function updateItem(
 }
 
 /**
+ * ItemParentChild and ModuleItem rows cascade automatically (onDelete:
+ * Cascade). TripItem.sourceItem is set null (onDelete: SetNull) — existing
+ * trip items keep their snapshot data and are otherwise unaffected.
+ */
+export async function deleteItem(ownerId: string, itemId: string) {
+  const owned = await prisma.item.count({ where: { id: itemId, ownerId } });
+  if (!owned) throw new Error("Item not found for this owner.");
+
+  await prisma.item.delete({ where: { id: itemId } });
+}
+
+/**
  * Adds parentId -> childId. Throws if this would create a cycle (a child
  * that is, directly or transitively, an ancestor of the parent) or a
  * self-reference. Duplicate links are no-ops.
