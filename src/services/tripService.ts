@@ -74,6 +74,35 @@ export async function getTrip(ownerId: string, tripId: string) {
   });
 }
 
+/** Shared JSON shape for the trip export route and the REST API's GET /trips/:id. */
+export function serializeTripDetail(trip: NonNullable<Awaited<ReturnType<typeof getTrip>>>) {
+  return {
+    id: trip.id,
+    name: trip.name,
+    destination: trip.destination,
+    startDate: trip.startDate,
+    endDate: trip.endDate,
+    bags: trip.bags.map((b) => ({
+      id: b.id,
+      name: b.name,
+      bagType: b.bagType,
+      color: b.color,
+      weightLimit: b.weightLimit,
+    })),
+    items: trip.tripItems
+      .filter((ti) => !ti.removed)
+      .map((ti) => ({
+        id: ti.id,
+        name: ti.name,
+        category: ti.category,
+        quantity: ti.quantityOverride ?? ti.quantity,
+        packed: ti.packed,
+        bag: ti.bag?.name ?? null,
+        notes: ti.notes,
+      })),
+  };
+}
+
 export async function createTrip(
   ownerId: string,
   input: {

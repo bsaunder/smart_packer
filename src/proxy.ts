@@ -20,5 +20,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)"],
+  // /api (both api/auth and api/v1) is excluded: those routes carry their
+  // own auth (session cookie for api/auth, Bearer API key for api/v1) and
+  // must return a proper 401 instead of an HTML redirect to /login.
+  matcher: ["/((?!login|api|_next/static|_next/image|favicon.ico).*)"],
 };

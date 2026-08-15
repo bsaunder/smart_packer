@@ -36,6 +36,7 @@ model User {
   items      Item[]
   modules    Module[]
   trips      Trip[]
+  apiKeys    ApiKey[]
 }
 
 model Session {
@@ -210,4 +211,21 @@ model Bag {
   tripItems TripItem[]
 
   @@index([tripId])
+}
+
+// Bearer tokens for the read/write REST API (src/app/api/v1). Independent of
+// Better Auth's session cookies -- a key is a long-lived credential a script
+// or external tool presents on every request. Only the SHA-256 hash is
+// stored; the raw key is shown once, at creation, and never again.
+model ApiKey {
+  id         String    @id @default(cuid())
+  ownerId    String
+  owner      User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name       String
+  keyHash    String    @unique
+  keyPrefix  String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([ownerId])
 }

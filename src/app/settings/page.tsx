@@ -2,8 +2,17 @@ import { Button } from "@/components/ui/button";
 import { ImportForm } from "./import-form";
 import { ThemeToggle } from "./theme-toggle";
 import { ChangePasswordForm } from "./change-password-form";
+import { ApiKeysManager } from "./api-keys-manager";
+import { getCurrentUser } from "@/lib/session";
+import { listApiKeys } from "@/services/apiKeyService";
 
-export default function SettingsPage() {
+// Per-user data; must not be statically prerendered at build time.
+export const dynamic = "force-dynamic";
+
+export default async function SettingsPage() {
+  const user = await getCurrentUser();
+  const apiKeys = await listApiKeys(user.id);
+
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-semibold">Settings</h1>
@@ -54,6 +63,17 @@ export default function SettingsPage() {
           </p>
         </div>
         <ImportForm />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-medium">API Keys</h2>
+          <p className="text-sm text-muted-foreground">
+            Bearer tokens for the REST API (<code>Authorization: Bearer &lt;key&gt;</code>), for
+            scripts or external tools — independent of your browser session.
+          </p>
+        </div>
+        <ApiKeysManager keys={apiKeys} />
       </section>
     </div>
   );

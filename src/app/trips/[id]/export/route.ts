@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { stringify } from "csv-stringify/sync";
 import { getCurrentUser } from "@/lib/session";
-import { getTrip } from "@/services/tripService";
+import { getTrip, serializeTripDetail } from "@/services/tripService";
 
 function slugify(name: string) {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "trip";
@@ -18,17 +18,8 @@ export async function GET(
 
   const format = request.nextUrl.searchParams.get("format") === "csv" ? "csv" : "json";
   const filename = slugify(trip.name);
-
-  const items = trip.tripItems
-    .filter((ti) => !ti.removed)
-    .map((ti) => ({
-      name: ti.name,
-      category: ti.category,
-      quantity: ti.quantityOverride ?? ti.quantity,
-      packed: ti.packed,
-      bag: ti.bag?.name ?? null,
-      notes: ti.notes,
-    }));
+  const payload = serializeTripDetail(trip);
+  const items = payload.items;
 
   if (format === "csv") {
     const csv = stringify(
@@ -50,22 +41,6 @@ export async function GET(
       },
     });
   }
-
-  const payload = {
-    id: trip.id,
-    name: trip.name,
-    destination: trip.destination,
-    startDate: trip.startDate,
-    endDate: trip.endDate,
-    bags: trip.bags.map((b) => ({
-      id: b.id,
-      name: b.name,
-      bagType: b.bagType,
-      color: b.color,
-      weightLimit: b.weightLimit,
-    })),
-    items,
-  };
 
   return new Response(JSON.stringify(payload, null, 2), {
     headers: {
