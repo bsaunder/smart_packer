@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ImportForm } from "./import-form";
 import { ThemeToggle } from "./theme-toggle";
+import { ChangePasswordForm } from "./change-password-form";
 
 export default function SettingsPage() {
   return (
@@ -15,6 +16,16 @@ export default function SettingsPage() {
           </p>
         </div>
         <ThemeToggle />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-medium">Password</h2>
+          <p className="text-sm text-muted-foreground">
+            Change your own password. This signs you out of any other active sessions.
+          </p>
+        </div>
+        <ChangePasswordForm />
       </section>
 
       <section className="flex flex-col gap-3">
