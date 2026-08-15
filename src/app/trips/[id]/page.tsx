@@ -78,7 +78,7 @@ export default async function TripDetailPage({
             </p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button asChild variant="outline">
             <Link href={`/trips/${trip.id}/edit`}>Edit</Link>
           </Button>
@@ -87,6 +87,12 @@ export default async function TripDetailPage({
           </Button>
           <Button asChild variant="outline">
             <Link href={printLink}>Print</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <a href={`${basePath}/export?format=json`}>Export JSON</a>
+          </Button>
+          <Button asChild variant="outline">
+            <a href={`${basePath}/export?format=csv`}>Export CSV</a>
           </Button>
           <form action={deleteTripAction}>
             <input type="hidden" name="tripId" value={trip.id} />
