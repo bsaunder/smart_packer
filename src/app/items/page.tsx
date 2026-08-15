@@ -14,22 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import Link from "next/link";
-import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { ItemsTable } from "./items-table";
 import {
   createItemAction,
   createCategoryInlineAction,
   addChildAction,
-  setItemActiveAction,
-  deleteItemAction,
 } from "./actions";
 
 export default async function ItemsPage() {
@@ -93,68 +82,7 @@ export default async function ItemsPage() {
         </form>
       )}
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead className="text-right">Default qty</TableHead>
-            <TableHead>Notes</TableHead>
-            <TableHead>Children</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="w-32" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((item) => (
-            <TableRow key={item.id} className={item.active ? "" : "text-muted-foreground"}>
-              <TableCell>{item.name}</TableCell>
-              <TableCell>{item.category.name}</TableCell>
-              <TableCell className="text-right">{item.defaultQuantity}</TableCell>
-              <TableCell className="text-muted-foreground">{item.notes}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {item.childLinks.map((l) => l.childItem.name).join(", ")}
-              </TableCell>
-              <TableCell>
-                <form action={setItemActiveAction}>
-                  <input type="hidden" name="itemId" value={item.id} />
-                  <input type="hidden" name="active" value={(!item.active).toString()} />
-                  <Button
-                    type="submit"
-                    size="sm"
-                    variant={item.active ? "outline" : "secondary"}
-                    aria-pressed={item.active}
-                  >
-                    {item.active ? "Active" : "Inactive"}
-                  </Button>
-                </form>
-              </TableCell>
-              <TableCell className="flex items-center gap-1">
-                <Button asChild size="sm" variant="ghost">
-                  <Link href={`/items/${item.id}/edit`}>Edit</Link>
-                </Button>
-                <form action={deleteItemAction}>
-                  <input type="hidden" name="itemId" value={item.id} />
-                  <ConfirmSubmitButton
-                    confirmMessage={`Delete item "${item.name}"? This also removes it from any modules and parent/child links.`}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    Delete
-                  </ConfirmSubmitButton>
-                </form>
-              </TableCell>
-            </TableRow>
-          ))}
-          {items.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
-                No items yet.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+      <ItemsTable items={items} categories={categories} />
 
       {items.length > 1 && (
         <form action={addChildAction} className="flex items-end gap-3">
