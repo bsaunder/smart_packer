@@ -1,0 +1,21 @@
+# Keep host build artifacts out of the build context — in particular a local
+# (possibly Windows) node_modules would otherwise overwrite the Linux one the
+# `deps` stage installs, via the builder stage's `COPY . .`.
+node_modules
+.next
+out
+coverage
+src/generated
+
+.git
+.github
+.env*
+!.env.example
+*.tsbuildinfo
+
+.claude
+.agents
+.windsurf
+.cursor
+.vscode
+.idea

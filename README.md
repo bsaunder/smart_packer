@@ -59,6 +59,45 @@ This is the deployment path — a compose file, no host `pnpm`/Node/Prisma CLI r
 
 Note on image size: the `migrate` image is intentionally larger than `app` (it bundles the full Prisma CLI, which pulls in Prisma Studio and other tooling the app itself never uses) — this is fine since it only runs briefly and exits; it's not part of the app's continuous runtime footprint. `app`'s image stays small (Next.js standalone output, no Prisma CLI) since that's the one actually running all the time. See DESIGN.md's Deployment section for the full rationale.
 
+### Deploying with prebuilt images (Dockge, Portainer, any remote host)
+
+`docker-compose.yml` builds from source, so it only works where the repo is checked out. For a server where you'd rather just paste a compose file (e.g. a [Dockge](https://github.com/louislam/dockge) stack), use **`docker-compose.prod.yml`** instead: it's the same three services, but it pulls prebuilt images from GitHub Container Registry, and it doesn't publish Postgres's port to the host.
+
+The images are built and pushed by [.github/workflows/docker-publish.yml](./.github/workflows/docker-publish.yml) on every push to `main` (and on `v*` tags):
+
+| Image | Dockerfile target | Tags |
+|---|---|---|
+| `ghcr.io/bsaunder/smart_packer` | `app` | `latest`, `sha-<short>`; `1.2.3` + `1.2` on a `v1.2.3` tag |
+| `ghcr.io/bsaunder/smart_packer-migrate` | `migrate` | same |
+
+The images are built for `linux/amd64` only. For an ARM host, see the `platforms` comment in the workflow.
+
+#### One-time setup
+
+1. **Publish the first images.** Push to `main`, or run the workflow by hand: GitHub → **Actions** → *Publish Docker images* → **Run workflow**. When it finishes, both packages appear under your GitHub profile → **Packages**.
+2. **Make sure both packages are public.** GHCR can create a new package as private even when the repo is public. Open each package from your profile's **Packages** tab and check its visibility. If it says Private, go to **Package settings** → **Change visibility** → Public. You only need to do this once per package, and after that the server can pull without logging in.
+
+   (If you ever take the repo or packages private again, the server has to log in to pull. Create a [personal access token (classic)](https://github.com/settings/tokens) with only the `read:packages` scope, then run `docker exec -it dockge docker login ghcr.io -u bsaunder` and paste the token as the password. The login goes inside the Dockge container because Dockge runs `docker` from there.)
+3. **Create the stack.** In Dockge: **+ Compose**, name it `smart-packer`, paste in the contents of `docker-compose.prod.yml`, and fill in the **.env** box:
+   ```
+   ADMIN_PASSWORD=<strong password for the first admin account>
+   AUTH_SECRET=<output of: openssl rand -base64 32>
+   APP_URL=https://packer.example.com   # the URL users will actually visit
+   TZ=America/New_York
+   # optional:
+   # APP_PORT=3000        # host port to publish the app on
+   # IMAGE_TAG=latest     # or pin e.g. sha-1a2b3c4 / 1.2.3
+   # ADMIN_USERNAME=admin
+   # LOG_LEVEL=info
+   ```
+4. **Deploy.** Dockge pulls both images and starts `db`, then `migrate` (migrations plus the first-run admin seed), then `app`. Sign in at `APP_URL` with `ADMIN_USERNAME`/`ADMIN_PASSWORD`.
+
+#### Updating
+
+Push to `main` and wait for the workflow to finish, then click **Update** on the stack in Dockge (the same as `docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d`). `migrate` re-runs automatically and applies any new migrations before the new `app` starts. To roll back, set `IMAGE_TAG` to an earlier `sha-…` tag and redeploy. Be careful here: migrations only run forward, so rolling back past a schema change can leave the old app out of step with the database. Take a backup (see below) before updates that add migrations.
+
+Backups work the same way as with the source-built stack, with two differences. Dockge names the stack after its folder, so the volume is `smart-packer_db-data` rather than `smart_packer_db-data`. And the `docker compose exec …` commands need to be run from the stack's folder (`/opt/stacks/smart-packer` by default), or with `-f` pointing at its compose file.
+
 Built with [Next.js](https://nextjs.org) (App Router), TypeScript, Tailwind CSS, shadcn/ui, Prisma, and PostgreSQL. See DESIGN.md for the full architecture.
 
 ## Backup & Restore

@@ -1,0 +1,58 @@
+# Production / Dockge deployment: same stack as docker-compose.yml, but pulls
+# the prebuilt images that .github/workflows/docker-publish.yml publishes to
+# GHCR instead of building from source — so this file works on its own, with
+# no repo checkout next to it (paste it straight into a Dockge stack).
+#
+# Required in .env: ADMIN_PASSWORD, AUTH_SECRET. See README "Deploying with
+# prebuilt images (Dockge)".
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: packer
+      POSTGRES_PASSWORD: packer
+      POSTGRES_DB: smart_packer
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # No published port: only `migrate` and `app` reach Postgres, over the
+    # stack's internal network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U packer -d smart_packer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: applies pending migrations and seeds the initial admin user
+  # (first run only), then exits. Re-runs on every deploy/update, so pulling
+  # a newer image is all an upgrade takes.
+  migrate:
+    image: ghcr.io/bsaunder/smart_packer-migrate:${IMAGE_TAG:-latest}
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://packer:packer@db:5432/smart_packer?schema=public
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+
+  app:
+    image: ghcr.io/bsaunder/smart_packer:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://packer:packer@db:5432/smart_packer?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: ${TZ:-UTC}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+volumes:
+  db-data:
