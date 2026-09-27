@@ -10,6 +10,7 @@ import { countItems } from "@/services/itemService";
 import { countModules } from "@/services/moduleService";
 import { countCategories } from "@/services/categoryService";
 import { formatDateRange } from "@/lib/formatDate";
+import { getBuildInfo, REPO_URL } from "@/lib/version";
 
 export default async function Dashboard() {
   const user = await getCurrentUser();
@@ -152,6 +153,34 @@ export default async function Dashboard() {
           </Card>
         </Link>
       </div>
+
+      <VersionFooter />
     </div>
+  );
+}
+
+function VersionFooter() {
+  const { version, commit, shortCommit, builtAt } = getBuildInfo();
+  const linkClass = "underline-offset-4 hover:text-foreground hover:underline";
+  return (
+    <footer className="border-t pt-4 text-center text-xs text-muted-foreground">
+      Smart Packing Planner v{version}
+      {" · "}
+      {commit ? (
+        <>
+          build{" "}
+          <a href={`${REPO_URL}/commit/${commit}`} className={`font-mono ${linkClass}`}>
+            {shortCommit}
+          </a>
+          {builtAt && ` (${builtAt.toLocaleDateString("en-US", { dateStyle: "medium" })})`}
+          {" · "}
+          <a href={`${REPO_URL}/commits/main`} className={linkClass}>
+            Check for updates
+          </a>
+        </>
+      ) : (
+        "local build"
+      )}
+    </footer>
   );
 }

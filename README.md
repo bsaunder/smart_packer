@@ -96,6 +96,25 @@ The images are built for `linux/amd64` only. For an ARM host, see the `platforms
 
 Push to `main` and wait for the workflow to finish, then click **Update** on the stack in Dockge (the same as `docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d`). `migrate` re-runs automatically and applies any new migrations before the new `app` starts. To roll back, set `IMAGE_TAG` to an earlier `sha-…` tag and redeploy. Be careful here: migrations only run forward, so rolling back past a schema change can leave the old app out of step with the database. Take a backup (see below) before updates that add migrations.
 
+#### Versioning: which build am I running?
+
+The bottom of the Dashboard shows what's running, for example `Smart Packing Planner v0.2.0 · build 1a2b3c4 (Sep 27, 2026) · Check for updates`:
+
+- **`v0.2.0`** is the release version, taken from `version` in `package.json`.
+- **`build 1a2b3c4`** is the exact commit the image was built from. GitHub Actions bakes it in. Click it to open that commit.
+- **Check for updates** opens the commit history on `main`. If the newest commit there is newer than your build (and its *Publish Docker images* run has finished), click **Update** in Dockge.
+
+Local `pnpm dev` and local `docker compose build` don't have a commit baked in, so they show "local build".
+
+To cut a numbered release:
+
+```bash
+npm version minor        # or patch / major: bumps package.json, commits, and tags v0.3.0
+git push --follow-tags   # pushes the commit and the tag
+```
+
+The tag push publishes images tagged `0.3.0` and `0.3` alongside `latest`, so you can pin `IMAGE_TAG=0.3.0` in Dockge. Pushes without a version bump still publish `latest` and are told apart by the build commit. (`npm version` only edits `package.json` and creates the git commit and tag, so it works fine in this pnpm project.)
+
 Backups work the same way as with the source-built stack, with two differences. Dockge names the stack after its folder, so the volume is `smart-packer_db-data` rather than `smart_packer_db-data`. And the `docker compose exec …` commands need to be run from the stack's folder (`/opt/stacks/smart-packer` by default), or with `-f` pointing at its compose file.
 
 Built with [Next.js](https://nextjs.org) (App Router), TypeScript, Tailwind CSS, shadcn/ui, Prisma, and PostgreSQL. See DESIGN.md for the full architecture.

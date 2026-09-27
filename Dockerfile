@@ -62,6 +62,15 @@ RUN mkdir -p /tmp/argon2-install && cd /tmp/argon2-install \
     && cp -r /tmp/argon2-install/node_modules/@node-rs /app/node_modules/@node-rs \
     && rm -rf /tmp/argon2-install
 
+# Build identity shown in the Dashboard footer (src/lib/version.ts). Passed by
+# .github/workflows/docker-publish.yml; empty for local builds, which the app
+# shows as "local build". Declared last so a new commit only invalidates this
+# layer, not the argon2 install above.
+ARG GIT_SHA=""
+ARG BUILD_DATE=""
+ENV APP_GIT_SHA=$GIT_SHA \
+    APP_BUILD_DATE=$BUILD_DATE
+
 EXPOSE 3000
 CMD ["node", "server.js"]
 

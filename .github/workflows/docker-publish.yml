@@ -61,6 +61,10 @@ jobs:
           # emulated arm64 Next.js builds are several times slower.
           platforms: linux/amd64
           push: true
+          # Shown in the app's Dashboard footer (see Dockerfile `app` stage).
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.target }}
