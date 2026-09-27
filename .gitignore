@@ -57,3 +57,6 @@ skills-lock.json
 
 # OS
 Thumbs.db
+
+# personal packing-list CSVs (real gear lists, not shared samples)
+/samples/packing-list-imports/
