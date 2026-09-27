@@ -264,13 +264,44 @@ export async function addModulesToTrip(
   return mergeItemsIntoTrip(ownerId, tripId, moduleIds);
 }
 
+/**
+ * Adds specific master Items — each with its recursively expanded children —
+ * to an existing Trip, without going through a Module (FR-019a). Items
+ * already on the Trip are skipped; items previously removed from this Trip
+ * are restored, since picking one by name is an explicit request for it.
+ */
+export async function addItemsToTrip(ownerId: string, tripId: string, itemIds: string[]) {
+  const trip = await prisma.trip.findFirst({ where: { id: tripId, ownerId } });
+  if (!trip) throw new Error("Trip not found for this owner.");
+
+  const owned = await prisma.item.findMany({
+    where: { id: { in: itemIds }, ownerId },
+    select: { id: true },
+  });
+  const ids = new Set(owned.map((i) => i.id));
+  for (const id of [...ids]) {
+    for (const d of await getDescendantIds(id)) ids.add(d);
+  }
+
+  const { count: restored } = await prisma.tripItem.updateMany({
+    where: { tripId, removed: true, sourceItemId: { in: [...ids] } },
+    data: { removed: false },
+  });
+  const { added } = await createTripItemsFor(ownerId, tripId, ids);
+  return { added, restored };
+}
+
 async function mergeItemsIntoTrip(
   ownerId: string,
   tripId: string,
   moduleIds: string[]
 ) {
   const itemIds = await collectExpandedItemIds(ownerId, moduleIds);
+  return createTripItemsFor(ownerId, tripId, itemIds);
+}
 
+/** Snapshots each Item not already on the Trip (removed or not) into a new Trip Item. */
+async function createTripItemsFor(ownerId: string, tripId: string, itemIds: Set<string>) {
   const alreadyPresent = await prisma.tripItem.findMany({
     where: { tripId, sourceItemId: { in: [...itemIds] } },
     select: { sourceItemId: true },

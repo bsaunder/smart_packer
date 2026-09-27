@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 import { getTrip } from "@/services/tripService";
 import { listModules } from "@/services/moduleService";
 import { listCategories } from "@/services/categoryService";
+import { listItems } from "@/services/itemService";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { deleteTripAction } from "../actions";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ import {
 } from "@/lib/packingListView";
 import { formatDateRange } from "@/lib/formatDate";
 import { PackingList } from "./packing-list";
+import { AddItemsPicker, type PickerItem } from "./add-items-picker";
 import { cn } from "@/lib/utils";
 
 function pillClass(active: boolean) {
@@ -49,13 +51,16 @@ export default async function TripDetailPage({
   const { view, filter, scope, scopeType, scopeValue } = parsed;
 
   const user = await getCurrentUser();
-  const [trip, modules, categories] = await Promise.all([
+  const [trip, modules, categories, items] = await Promise.all([
     getTrip(user.id, id),
     listModules(user.id),
     listCategories(user.id),
+    listItems(user.id),
   ]);
 
   if (!trip) notFound();
+
+  const pickerItems = buildPickerItems(items, trip.tripItems);
 
   const dateRange = formatDateRange(trip.startDate, trip.endDate);
   const allCategories = allCategoriesOf(trip);
@@ -162,6 +167,8 @@ export default async function TripDetailPage({
       </div>
 
       <PackingList groups={[...groups.entries()]} bags={trip.bags} tripId={trip.id} />
+
+      <AddItemsPicker items={pickerItems} tripId={trip.id} />
 
       <div className="grid gap-6 sm:grid-cols-2">
         <form action={addCustomItemAction} className="flex flex-col gap-3 rounded-lg border p-4">
@@ -281,4 +288,43 @@ export default async function TripDetailPage({
       </div>
     </div>
   );
+}
+
+/**
+ * Active master Items for the "add items" picker, each with the names of
+ * everything that comes along with it (recursive children, cycle-safe) and
+ * whether it's already on this trip (not counting removed trip items).
+ */
+function buildPickerItems(
+  items: Awaited<ReturnType<typeof listItems>>,
+  tripItems: { sourceItemId: string | null; removed: boolean }[]
+): PickerItem[] {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const onTrip = new Set(tripItems.filter((t) => !t.removed).map((t) => t.sourceItemId));
+
+  function includes(rootId: string) {
+    const seen = new Set<string>([rootId]);
+    const names: string[] = [];
+    const queue = [rootId];
+    while (queue.length > 0) {
+      for (const link of byId.get(queue.shift()!)?.childLinks ?? []) {
+        if (seen.has(link.childItem.id)) continue;
+        seen.add(link.childItem.id);
+        names.push(link.childItem.name);
+        queue.push(link.childItem.id);
+      }
+    }
+    return names;
+  }
+
+  return items
+    .filter((i) => i.active)
+    .map((i) => ({
+      id: i.id,
+      name: i.name,
+      category: i.category.name,
+      notes: i.notes,
+      includes: includes(i.id),
+      onTrip: onTrip.has(i.id),
+    }));
 }

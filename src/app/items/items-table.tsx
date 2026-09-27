@@ -96,9 +96,15 @@ export function ItemsTable({
               <TableCell>{item.name}</TableCell>
               <TableCell>{item.category.name}</TableCell>
               <TableCell className="text-right">{item.defaultQuantity}</TableCell>
-              <TableCell className="text-muted-foreground">{item.notes}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {item.childLinks.map((l) => l.childItem.name).join(", ")}
+              <TableCell className="max-w-xs whitespace-normal text-muted-foreground">{item.notes}</TableCell>
+              <TableCell className="max-w-xs whitespace-normal text-muted-foreground">
+                {item.childLinks.length > 0 && (
+                  <ul className="list-disc pl-4">
+                    {item.childLinks.map((l) => (
+                      <li key={l.childItem.name}>{l.childItem.name}</li>
+                    ))}
+                  </ul>
+                )}
               </TableCell>
               <TableCell>
                 <form action={setItemActiveAction}>

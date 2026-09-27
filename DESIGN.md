@@ -533,6 +533,7 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 - **FR-018** — Users shall be able to remove Items from a specific Trip without removing them from any Module.
 - **FR-018a** — Removing a parent Item (from a Module or a Trip) shall **not** remove its child Items. *(1.2.)*
 - **FR-019** — Users shall be able to manually add custom Items to a Trip.
+- **FR-019a** — Users shall be able to add specific existing master Items to a Trip without going through a Module, by searching and selecting them. Each selected Item brings its recursively expanded children, exactly as Module expansion would. Items already on the Trip are skipped; an Item previously removed from this Trip is restored, since selecting it by name is an explicit request for it (unlike FR-016a, where a Module merge leaves removed items removed). Only active Items are offered for selection. Also exposed as `POST /api/v1/trips/{id}/items`.
 - **FR-020** — Packing Lists shall be grouped by Category and displayed according to Category sort order.
 
 ### Bags
@@ -682,6 +683,12 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 **Flow:** Open the Trip → Add Module → select "Camera" → confirm.
 **System response:** `TripService` expands and deduplicates the Module's items and merges any not already present into the Trip, leaving existing packed status, quantity overrides, custom items, and bag assignments untouched.
 **Result:** The Trip gains the missing items without losing prior packing progress.
+
+### UC-016b — Add Specific Items to a Trip
+**Actor:** User. **Scenario:** A user knows exactly which camera bag and which camera body they're taking, and doesn't want to merge a whole Module only to delete most of it.
+**Flow:** Open the Trip → "Add items from your master list" → search → tick "Think Tank Perception Pro" and "Olympus OM-D EM-1 MkII" → Add.
+**System response:** `TripService.addItemsToTrip` adds both Items plus the camera's recursively expanded children (batteries, charger, the charger's cable), skipping any already on the Trip and restoring any previously removed from it (FR-019a).
+**Result:** The Trip gains exactly the chosen items and their required accessories.
 
 ### UC-018 — Import an Existing List from CSV
 **Actor:** User. **Scenario:** The user has an existing packing spreadsheet and wants to seed the application.

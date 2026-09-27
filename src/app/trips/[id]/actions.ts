@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
 import {
   addCustomTripItem,
+  addItemsToTrip,
   addModulesToTrip,
   removeTripItem,
   saveTripItemToMasterList,
@@ -76,6 +77,16 @@ export async function addModulesToTripAction(formData: FormData) {
   if (!tripId || moduleIds.length === 0) return;
 
   await addModulesToTrip(user.id, tripId, moduleIds);
+  revalidatePath(`/trips/${tripId}`);
+}
+
+export async function addItemsToTripAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const tripId = String(formData.get("tripId") ?? "");
+  const itemIds = formData.getAll("itemIds").map(String);
+  if (!tripId || itemIds.length === 0) return;
+
+  await addItemsToTrip(user.id, tripId, itemIds);
   revalidatePath(`/trips/${tripId}`);
 }
 
