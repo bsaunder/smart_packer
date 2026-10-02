@@ -13,6 +13,7 @@ export async function exportItemsCsv(ownerId: string): Promise<string> {
     where: { ownerId },
     include: {
       category: true,
+      defaultBag: true,
       moduleItems: { include: { module: true } },
       childLinks: { include: { childItem: true } },
     },
@@ -27,6 +28,7 @@ export async function exportItemsCsv(ownerId: string): Promise<string> {
     active: item.active ? "true" : "false",
     modules: item.moduleItems.map((mi) => mi.module.name).join(MULTI_VALUE_SEPARATOR),
     children: item.childLinks.map((cl) => cl.childItem.name).join(MULTI_VALUE_SEPARATOR),
+    default_bag: item.defaultBag?.name ?? "",
   }));
 
   return stringify(records, { header: true, columns: [...CSV_COLUMNS] });

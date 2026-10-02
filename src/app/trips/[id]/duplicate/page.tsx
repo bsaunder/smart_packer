@@ -24,8 +24,8 @@ export default async function DuplicateTripPage({
         <h1 className="text-2xl font-semibold">Duplicate: {trip.name}</h1>
         <p className="text-muted-foreground">
           Copies the {itemCount} current item{itemCount === 1 ? "" : "s"} (including custom additions,
-          quantity overrides, and bag structure) into a new trip. Packed status resets — nothing
-          starts pre-packed. Dates aren't copied since this is presumably for a different trip.
+          quantity overrides, and bag assignments) into a new trip. Packed status resets — nothing
+          starts pre-packed. Dates aren&rsquo;t copied since this is presumably for a different trip.
         </p>
       </div>
 

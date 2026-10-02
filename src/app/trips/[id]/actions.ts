@@ -12,7 +12,7 @@ import {
   setTripItemPacked,
   setTripItemQuantity,
 } from "@/services/tripService";
-import { createBag, deleteBag, updateBag } from "@/services/bagService";
+import { findOrCreateBagByName } from "@/services/bagService";
 import { findOrCreateCategoryByName } from "@/services/categoryService";
 
 export async function togglePackedAction(formData: FormData) {
@@ -101,49 +101,17 @@ export async function assignBagAction(formData: FormData) {
   revalidatePath(`/trips/${tripId}`);
 }
 
+/**
+ * Quick-creates a master Bag from the trip page (for a bag first needed on
+ * this trip), so it's immediately available in every item's bag picker.
+ * Reuses an existing bag of the same name rather than failing.
+ */
 export async function createBagAction(formData: FormData) {
   const user = await getCurrentUser();
   const tripId = String(formData.get("tripId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  const bagType = String(formData.get("bagType") ?? "").trim();
-  const color = String(formData.get("color") ?? "").trim();
-  const rawWeightLimit = String(formData.get("weightLimit") ?? "").trim();
   if (!tripId || !name) return;
 
-  await createBag(user.id, tripId, {
-    name,
-    bagType: bagType || undefined,
-    color: color || undefined,
-    weightLimit: rawWeightLimit ? Number(rawWeightLimit) : undefined,
-  });
-  revalidatePath(`/trips/${tripId}`);
-}
-
-export async function updateBagAction(formData: FormData) {
-  const user = await getCurrentUser();
-  const bagId = String(formData.get("bagId") ?? "");
-  const tripId = String(formData.get("tripId") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
-  const bagType = String(formData.get("bagType") ?? "").trim();
-  const color = String(formData.get("color") ?? "").trim();
-  const rawWeightLimit = String(formData.get("weightLimit") ?? "").trim();
-  if (!bagId || !name) return;
-
-  await updateBag(user.id, bagId, {
-    name,
-    bagType: bagType || undefined,
-    color: color || undefined,
-    weightLimit: rawWeightLimit ? Number(rawWeightLimit) : undefined,
-  });
-  revalidatePath(`/trips/${tripId}`);
-}
-
-export async function deleteBagAction(formData: FormData) {
-  const user = await getCurrentUser();
-  const bagId = String(formData.get("bagId") ?? "");
-  const tripId = String(formData.get("tripId") ?? "");
-  if (!bagId) return;
-
-  await deleteBag(user.id, bagId);
+  await findOrCreateBagByName(user.id, name);
   revalidatePath(`/trips/${tripId}`);
 }

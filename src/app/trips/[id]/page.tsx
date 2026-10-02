@@ -5,6 +5,7 @@ import { getTrip } from "@/services/tripService";
 import { listModules } from "@/services/moduleService";
 import { listCategories } from "@/services/categoryService";
 import { listItems } from "@/services/itemService";
+import { listBags } from "@/services/bagService";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { deleteTripAction } from "../actions";
 import { Input } from "@/components/ui/input";
@@ -15,8 +16,6 @@ import {
   addCustomItemAction,
   addModulesToTripAction,
   createBagAction,
-  deleteBagAction,
-  updateBagAction,
 } from "./actions";
 import {
   allCategoriesOf,
@@ -51,14 +50,24 @@ export default async function TripDetailPage({
   const { view, filter, scope, scopeType, scopeValue } = parsed;
 
   const user = await getCurrentUser();
-  const [trip, modules, categories, items] = await Promise.all([
+  const [trip, modules, categories, items, allBags] = await Promise.all([
     getTrip(user.id, id),
     listModules(user.id),
     listCategories(user.id),
     listItems(user.id),
+    listBags(user.id),
   ]);
 
   if (!trip) notFound();
+
+  // Bag picker options: active bags, plus any inactive bag this trip still
+  // uses, so a retired bag's existing assignments stay visible/selectable.
+  const inUse = new Set(trip.bags.map((b) => b.id));
+  const bagOptions = allBags.filter((b) => b.active || inUse.has(b.id));
+  const bagSummary = trip.bags.map((bag) => {
+    const bagItems = trip.tripItems.filter((ti) => !ti.removed && ti.bagId === bag.id);
+    return { bag, count: bagItems.length, packed: bagItems.filter((ti) => ti.packed).length };
+  });
 
   const pickerItems = buildPickerItems(items, trip.tripItems);
 
@@ -102,7 +111,7 @@ export default async function TripDetailPage({
           <form action={deleteTripAction}>
             <input type="hidden" name="tripId" value={trip.id} />
             <ConfirmSubmitButton
-              confirmMessage={`Delete trip "${trip.name}"? This permanently removes all its items and bags.`}
+              confirmMessage={`Delete trip "${trip.name}"? This permanently removes all its items.`}
               variant="outline"
               className="text-destructive hover:text-destructive"
             >
@@ -166,7 +175,7 @@ export default async function TripDetailPage({
         </div>
       </div>
 
-      <PackingList groups={[...groups.entries()]} bags={trip.bags} tripId={trip.id} />
+      <PackingList groups={[...groups.entries()]} bags={bagOptions} tripId={trip.id} />
 
       <AddItemsPicker items={pickerItems} tripId={trip.id} />
 
@@ -216,74 +225,47 @@ export default async function TripDetailPage({
       </div>
 
       <div className="flex flex-col gap-3 rounded-lg border p-4">
-        <h3 className="font-medium">Bags</h3>
-        {trip.bags.length > 0 && (
-          <ul className="flex flex-col gap-2 text-sm">
-            {trip.bags.map((bag) => (
-              <li key={bag.id} className="flex flex-wrap items-end gap-2 border-b pb-2 last:border-b-0 last:pb-0">
-                <form action={updateBagAction} className="flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="bagId" value={bag.id} />
-                  <input type="hidden" name="tripId" value={trip.id} />
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor={`bagName-${bag.id}`} className="text-xs">Name</Label>
-                    <Input id={`bagName-${bag.id}`} name="name" defaultValue={bag.name} required className="h-8 w-40" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor={`bagType-${bag.id}`} className="text-xs">Type</Label>
-                    <Input id={`bagType-${bag.id}`} name="bagType" defaultValue={bag.bagType ?? ""} className="h-8 w-28" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor={`bagColor-${bag.id}`} className="text-xs">Color</Label>
-                    <Input id={`bagColor-${bag.id}`} name="color" defaultValue={bag.color ?? ""} className="h-8 w-24" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor={`bagWeight-${bag.id}`} className="text-xs">Weight limit</Label>
-                    <Input
-                      id={`bagWeight-${bag.id}`}
-                      name="weightLimit"
-                      type="number"
-                      min={0}
-                      step="0.1"
-                      defaultValue={bag.weightLimit ?? ""}
-                      className="h-8 w-24"
-                    />
-                  </div>
-                  <Button type="submit" size="sm" variant="ghost">
-                    Save
-                  </Button>
-                </form>
-                <form action={deleteBagAction}>
-                  <input type="hidden" name="bagId" value={bag.id} />
-                  <input type="hidden" name="tripId" value={trip.id} />
-                  <Button type="submit" size="sm" variant="ghost">
-                    Delete
-                  </Button>
-                </form>
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="font-medium">Bags on this trip</h3>
+          <Link href="/bags" className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            Manage bags
+          </Link>
+        </div>
+        {bagSummary.length > 0 ? (
+          <ul className="flex flex-col gap-1 text-sm">
+            {bagSummary.map(({ bag, count, packed }) => (
+              <li key={bag.id} className="flex items-baseline justify-between gap-3 border-b pb-1 last:border-b-0">
+                <span>
+                  {bag.name}
+                  {[bag.bagType, bag.color].some(Boolean) && (
+                    <span className="ml-2 text-muted-foreground">{[bag.bagType, bag.color].filter(Boolean).join(", ")}</span>
+                  )}
+                </span>
+                <span className="text-muted-foreground">
+                  {packed}/{count} packed
+                </span>
               </li>
             ))}
           </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No items are assigned to a bag yet. Items with a default bag land in it automatically when added to a
+            trip; otherwise pick a bag on each item above.
+          </p>
         )}
         <form action={createBagAction} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="tripId" value={trip.id} />
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="bagName">Name</Label>
-            <Input id="bagName" name="name" placeholder="e.g. Checked Suitcase" required className="w-48" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="bagType">Type</Label>
-            <Input id="bagType" name="bagType" placeholder="optional" className="w-32" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="bagColor">Color</Label>
-            <Input id="bagColor" name="color" placeholder="optional" className="w-24" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="weightLimit">Weight limit</Label>
-            <Input id="weightLimit" name="weightLimit" type="number" min={0} step="0.1" placeholder="optional" className="w-28" />
+            <Label htmlFor="bagName">New bag</Label>
+            <Input id="bagName" name="name" placeholder="e.g. Borrowed Duffel" required className="w-56" />
           </div>
           <Button type="submit" variant="secondary">
-            Add bag
+            Create bag
           </Button>
+          <p className="basis-full text-xs text-muted-foreground">
+            Adds it to your Bags list so you can assign items to it here and on future trips. If it&rsquo;s a
+            one-off, mark it inactive on the Bags page afterward. This trip keeps showing it.
+          </p>
         </form>
       </div>
     </div>

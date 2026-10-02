@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getDescendantIds } from "@/services/itemService";
 import { findOrCreateCategoryByName } from "@/services/categoryService";
+import { assertOwnsBag } from "@/services/bagService";
 
 export async function listTrips(ownerId: string) {
   return prisma.trip.findMany({
@@ -64,14 +65,26 @@ export async function getDashboardTripBuckets(ownerId: string) {
   return { upcoming, previous };
 }
 
+/**
+ * A Trip with its items (each with its assigned Bag) plus `bags`: the
+ * distinct master Bags its non-removed items are assigned to, by name.
+ * Bags are owner-level master data (FR-021), so a Trip's bags are simply
+ * the ones it uses.
+ */
 export async function getTrip(ownerId: string, tripId: string) {
-  return prisma.trip.findFirst({
+  const trip = await prisma.trip.findFirst({
     where: { id: tripId, ownerId },
     include: {
       tripItems: { include: { bag: true }, orderBy: { name: "asc" } },
-      bags: true,
     },
   });
+  if (!trip) return null;
+
+  const bags = new Map<string, NonNullable<(typeof trip.tripItems)[number]["bag"]>>();
+  for (const ti of trip.tripItems) {
+    if (!ti.removed && ti.bag) bags.set(ti.bag.id, ti.bag);
+  }
+  return { ...trip, bags: [...bags.values()].sort((a, b) => a.name.localeCompare(b.name)) };
 }
 
 /** Shared JSON shape for the trip export route and the REST API's GET /trips/:id. */
@@ -142,7 +155,7 @@ export async function updateTrip(
   });
 }
 
-/** Cascades to delete this Trip's TripItems and Bags (onDelete: Cascade). */
+/** Cascades to delete this Trip's TripItems (onDelete: Cascade); master Bags are untouched. */
 export async function deleteTrip(ownerId: string, tripId: string) {
   const existing = await prisma.trip.findFirst({ where: { id: tripId, ownerId } });
   if (!existing) throw new Error("Trip not found for this owner.");
@@ -153,10 +166,9 @@ export async function deleteTrip(ownerId: string, tripId: string) {
 /**
  * Duplicates a Trip: copies its current (non-removed) Trip Items — as
  * actually packed, including custom additions, quantity overrides, and
- * exclusions — and its Bags, into a new Trip. Packed status resets to
- * unpacked; dates are not copied (a duplicate is presumably for a future
- * trip with its own dates). Bag assignments are preserved by recreating
- * each Bag under the new Trip and remapping.
+ * exclusions — with their Bag assignments, into a new Trip. Packed status
+ * resets to unpacked; dates are not copied (a duplicate is presumably for
+ * a future trip with its own dates).
  */
 export async function duplicateTrip(
   ownerId: string,
@@ -166,7 +178,6 @@ export async function duplicateTrip(
   const source = await prisma.trip.findFirst({
     where: { id: sourceTripId, ownerId },
     include: {
-      bags: true,
       tripItems: { where: { removed: false } },
     },
   });
@@ -183,20 +194,6 @@ export async function duplicateTrip(
       },
     });
 
-    const bagIdMap = new Map<string, string>();
-    for (const bag of source.bags) {
-      const newBag = await tx.bag.create({
-        data: {
-          tripId: newTrip.id,
-          name: bag.name,
-          bagType: bag.bagType,
-          color: bag.color,
-          weightLimit: bag.weightLimit,
-        },
-      });
-      bagIdMap.set(bag.id, newBag.id);
-    }
-
     if (source.tripItems.length > 0) {
       await tx.tripItem.createMany({
         data: source.tripItems.map((item) => ({
@@ -208,7 +205,7 @@ export async function duplicateTrip(
           quantity: item.quantity,
           quantityOverride: item.quantityOverride,
           tripNotes: item.tripNotes,
-          bagId: item.bagId ? (bagIdMap.get(item.bagId) ?? null) : null,
+          bagId: item.bagId,
           packed: false,
         })),
       });
@@ -324,6 +321,8 @@ async function createTripItemsFor(ownerId: string, tripId: string, itemIds: Set<
       category: item.category.name,
       notes: item.notes,
       quantity: item.defaultQuantity,
+      // Snapshot of the Item's default Bag (FR-022a); reassignable per trip.
+      bagId: item.defaultBagId,
     })),
   });
 
@@ -375,6 +374,8 @@ export async function saveTripItemToMasterList(ownerId: string, tripItemId: stri
         categoryId: (await findOrCreateCategoryByName(ownerId, tripItem.category)).id,
         defaultQuantity: tripItem.quantity,
         notes: tripItem.notes,
+        // The bag it was packed in on this trip becomes its default.
+        defaultBagId: tripItem.bagId,
       },
     }));
 
@@ -409,25 +410,17 @@ export async function setTripItemPacked(
 }
 
 /**
- * Assigns (or clears, with bagId null) a Trip Item's Bag. Bags are always
- * scoped to the same Trip as the item (FR-022, FR-023); packing status is
- * untouched (FR-025).
+ * Assigns (or clears, with bagId null) a Trip Item's Bag — any of the
+ * owner's master Bags (FR-022, FR-023). Packing status is untouched
+ * (FR-025), and the master Item's default Bag is never changed (FR-026).
  */
 export async function setTripItemBag(
   ownerId: string,
   tripItemId: string,
   bagId: string | null
 ) {
-  const tripItem = await prisma.tripItem.findFirst({
-    where: { id: tripItemId, trip: { ownerId } },
-    select: { tripId: true },
-  });
-  if (!tripItem) throw new Error("Trip item not found for this owner.");
-
-  if (bagId) {
-    const bag = await prisma.bag.findFirst({ where: { id: bagId, tripId: tripItem.tripId } });
-    if (!bag) throw new Error("Bag not found for this trip.");
-  }
+  await assertOwnsTripItem(ownerId, tripItemId);
+  if (bagId) await assertOwnsBag(ownerId, bagId);
 
   return prisma.tripItem.update({
     where: { id: tripItemId },

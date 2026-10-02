@@ -115,6 +115,9 @@ export function ImportForm() {
               {preview.summary.modulesToCreate.length > 0 && (
                 <p>New modules: {preview.summary.modulesToCreate.join(", ")}</p>
               )}
+              {preview.summary.bagsToCreate.length > 0 && (
+                <p>New bags: {preview.summary.bagsToCreate.join(", ")}</p>
+              )}
             </div>
           )}
         </div>

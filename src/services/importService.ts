@@ -7,6 +7,7 @@ export type ImportRowError = { row: number; message: string };
 export type ImportSummary = {
   categoriesToCreate: string[];
   modulesToCreate: string[];
+  bagsToCreate: string[];
   itemsToCreate: number;
   itemsToUpdate: number;
 };
@@ -25,6 +26,8 @@ type ParsedRow = {
   active: boolean;
   modules: string[];
   children: string[];
+  /** Blank/absent leaves an existing Item's default Bag unchanged. */
+  defaultBag: string | null;
 };
 
 function splitMultiValue(raw: string | undefined): string[] {
@@ -104,6 +107,7 @@ function parseRows(csvText: string): { rows: ParsedRow[]; errors: ImportRowError
       active,
       modules: splitMultiValue(record.modules),
       children: splitMultiValue(record.children),
+      defaultBag: (record.default_bag ?? "").trim() || null,
     });
   });
 
@@ -222,14 +226,20 @@ async function buildPreview(ownerId: string, rows: ParsedRow[], parseErrors: Imp
     (await prisma.module.findMany({ where: { ownerId }, select: { name: true } })).map((m) => m.name)
   );
 
+  const existingBags = new Set(
+    (await prisma.bag.findMany({ where: { ownerId }, select: { name: true } })).map((b) => b.name)
+  );
+
   const categoriesToCreate = new Set<string>();
   const modulesToCreate = new Set<string>();
+  const bagsToCreate = new Set<string>();
   let itemsToCreate = 0;
   let itemsToUpdate = 0;
 
   for (const r of rows) {
     if (!existingCategories.has(r.category)) categoriesToCreate.add(r.category);
     for (const m of r.modules) if (!existingModules.has(m)) modulesToCreate.add(m);
+    if (r.defaultBag && !existingBags.has(r.defaultBag)) bagsToCreate.add(r.defaultBag);
     if (existingNames.has(r.name)) itemsToUpdate++;
     else itemsToCreate++;
   }
@@ -239,6 +249,7 @@ async function buildPreview(ownerId: string, rows: ParsedRow[], parseErrors: Imp
     summary: {
       categoriesToCreate: [...categoriesToCreate],
       modulesToCreate: [...modulesToCreate],
+      bagsToCreate: [...bagsToCreate],
       itemsToCreate,
       itemsToUpdate,
     },
@@ -282,6 +293,19 @@ export async function commitImport(ownerId: string, csvText: string): Promise<Im
       return created.id;
     }
 
+    const bagIdByName = new Map<string, string>();
+    for (const bag of await tx.bag.findMany({ where: { ownerId }, select: { id: true, name: true } })) {
+      bagIdByName.set(bag.name, bag.id);
+    }
+
+    async function ensureBag(name: string) {
+      const existing = bagIdByName.get(name);
+      if (existing) return existing;
+      const created = await tx.bag.create({ data: { ownerId, name } });
+      bagIdByName.set(name, created.id);
+      return created.id;
+    }
+
     async function ensureModule(name: string) {
       const existing = moduleIdByName.get(name);
       if (existing) return existing;
@@ -294,6 +318,7 @@ export async function commitImport(ownerId: string, csvText: string): Promise<Im
 
     for (const r of rows) {
       const categoryId = await ensureCategory(r.category);
+      const defaultBagId = r.defaultBag ? await ensureBag(r.defaultBag) : undefined;
 
       const item = await tx.item.upsert({
         where: { ownerId_name: { ownerId, name: r.name } },
@@ -304,12 +329,14 @@ export async function commitImport(ownerId: string, csvText: string): Promise<Im
           defaultQuantity: r.defaultQuantity,
           notes: r.notes,
           active: r.active,
+          defaultBagId,
         },
         update: {
           categoryId,
           defaultQuantity: r.defaultQuantity,
           notes: r.notes,
           active: r.active,
+          defaultBagId,
         },
       });
       itemIdByName.set(r.name, item.id);

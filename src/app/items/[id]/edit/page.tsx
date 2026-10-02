@@ -3,9 +3,12 @@ import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { getItem } from "@/services/itemService";
 import { listCategories } from "@/services/categoryService";
+import { listBags } from "@/services/bagService";
+import { DefaultBagSelect } from "../../default-bag-select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ActionForm } from "@/components/action-form";
 import {
   Select,
   SelectContent,
@@ -22,9 +25,10 @@ export default async function EditItemPage({
 }) {
   const { id } = await params;
   const user = await getCurrentUser();
-  const [item, categories] = await Promise.all([
+  const [item, categories, bags] = await Promise.all([
     getItem(user.id, id),
     listCategories(user.id),
+    listBags(user.id),
   ]);
 
   if (!item) notFound();
@@ -33,7 +37,7 @@ export default async function EditItemPage({
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Edit Item</h1>
 
-      <form action={updateItemAction} className="flex flex-col gap-4 rounded-lg border p-4">
+      <ActionForm action={updateItemAction} className="flex flex-col gap-4 rounded-lg border p-4">
         <input type="hidden" name="itemId" value={item.id} />
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1.5">
@@ -70,6 +74,7 @@ export default async function EditItemPage({
             <Label htmlFor="notes">Notes</Label>
             <Input id="notes" name="notes" defaultValue={item.notes ?? ""} placeholder="optional" className="w-48" />
           </div>
+          <DefaultBagSelect bags={bags} defaultValue={item.defaultBagId} />
         </div>
 
         <label className="flex w-fit items-center gap-2 text-sm">
@@ -83,7 +88,7 @@ export default async function EditItemPage({
             <Link href="/items">Cancel</Link>
           </Button>
         </div>
-      </form>
+      </ActionForm>
     </div>
   );
 }

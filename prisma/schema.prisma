@@ -36,6 +36,7 @@ model User {
   items      Item[]
   modules    Module[]
   trips      Trip[]
+  bags       Bag[]
   apiKeys    ApiKey[]
 }
 
@@ -110,6 +111,8 @@ model Item {
   defaultQuantity Int      @default(1)
   notes           String?
   active          Boolean  @default(true)
+  defaultBagId    String?
+  defaultBag      Bag?     @relation(fields: [defaultBagId], references: [id], onDelete: SetNull)
 
   moduleItems ModuleItem[]
   tripItems   TripItem[]
@@ -121,6 +124,7 @@ model Item {
   @@unique([ownerId, name])
   @@index([ownerId])
   @@index([categoryId])
+  @@index([defaultBagId])
 }
 
 // Parent -> children direction, matching DESIGN.md's CSV `children` column.
@@ -167,7 +171,6 @@ model Trip {
   createdAt   DateTime  @default(now())
 
   tripItems TripItem[]
-  bags      Bag[]
 
   @@index([ownerId])
 }
@@ -175,16 +178,16 @@ model Trip {
 // Snapshot of an Item at generation time (FR-014a). Denormalized fields are
 // authoritative for display; sourceItemId is a soft reference only.
 model TripItem {
-  id               String  @id @default(cuid())
-  tripId           String
-  trip             Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  sourceItemId     String?
-  sourceItem       Item?   @relation(fields: [sourceItemId], references: [id], onDelete: SetNull)
+  id           String  @id @default(cuid())
+  tripId       String
+  trip         Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  sourceItemId String?
+  sourceItem   Item?   @relation(fields: [sourceItemId], references: [id], onDelete: SetNull)
 
-  name             String
-  category         String
-  notes            String?
-  quantity         Int     @default(1)
+  name     String
+  category String
+  notes    String?
+  quantity Int     @default(1)
 
   quantityOverride Int?
   packed           Boolean @default(false)
@@ -199,18 +202,24 @@ model TripItem {
   @@index([bagId])
 }
 
+// Master data, like Category: one row per physical bag, shared by every
+// Trip. Items name a default; TripItem.bagId is the per-trip assignment,
+// copied from the Item's default when the Trip Item is created.
 model Bag {
   id          String  @id @default(cuid())
-  tripId      String
-  trip        Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  ownerId     String
+  owner       User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name        String
   bagType     String?
   color       String?
   weightLimit Float?
+  active      Boolean @default(true)
 
+  items     Item[]
   tripItems TripItem[]
 
-  @@index([tripId])
+  @@unique([ownerId, name])
+  @@index([ownerId])
 }
 
 // Bearer tokens for the read/write REST API (src/app/api/v1). Independent of

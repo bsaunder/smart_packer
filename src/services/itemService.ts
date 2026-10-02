@@ -1,10 +1,16 @@
 import { prisma } from "@/lib/prisma";
+import { assertOwnsBag } from "@/services/bagService";
+import { uniqueName } from "@/lib/errors";
+
+const nameTaken = (name: string) =>
+  `You already have an item named "${name}". Item names must be unique; search the Items list to edit the existing one.`;
 
 export async function listItems(ownerId: string) {
   return prisma.item.findMany({
     where: { ownerId },
     include: {
       category: true,
+      defaultBag: true,
       childLinks: { include: { childItem: true } },
     },
     orderBy: { name: "asc" },
@@ -30,18 +36,24 @@ export async function createItem(
     defaultQuantity?: number;
     notes?: string;
     active?: boolean;
+    defaultBagId?: string | null;
   }
 ) {
-  return prisma.item.create({
-    data: {
-      ownerId,
-      name: input.name,
-      categoryId: input.categoryId,
-      defaultQuantity: input.defaultQuantity ?? 1,
-      notes: input.notes,
-      active: input.active ?? true,
-    },
-  });
+  if (input.defaultBagId) await assertOwnsBag(ownerId, input.defaultBagId);
+  return uniqueName(
+    prisma.item.create({
+      data: {
+        ownerId,
+        name: input.name,
+        categoryId: input.categoryId,
+        defaultQuantity: input.defaultQuantity ?? 1,
+        notes: input.notes,
+        active: input.active ?? true,
+        defaultBagId: input.defaultBagId ?? null,
+      },
+    }),
+    nameTaken(input.name)
+  );
 }
 
 export async function updateItem(
@@ -53,12 +65,17 @@ export async function updateItem(
     defaultQuantity: number;
     notes: string | null;
     active: boolean;
+    defaultBagId: string | null;
   }>
 ) {
-  return prisma.item.update({
-    where: { id: itemId, ownerId },
-    data: input,
-  });
+  if (input.defaultBagId) await assertOwnsBag(ownerId, input.defaultBagId);
+  return uniqueName(
+    prisma.item.update({
+      where: { id: itemId, ownerId },
+      data: input,
+    }),
+    nameTaken(input.name ?? "")
+  );
 }
 
 /**

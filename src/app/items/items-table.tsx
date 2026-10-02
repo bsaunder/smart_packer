@@ -23,6 +23,8 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { setItemActiveAction, deleteItemAction } from "./actions";
 
 const ALL_CATEGORIES = "all";
+const ALL_BAGS = "all";
+const NO_BAG_FILTER = "none";
 
 type Item = {
   id: string;
@@ -31,27 +33,33 @@ type Item = {
   defaultQuantity: number;
   active: boolean;
   category: { id: string; name: string };
+  defaultBag: { id: string; name: string } | null;
   childLinks: { childItem: { name: string } }[];
 };
 
 export function ItemsTable({
   items,
   categories,
+  bags,
 }: {
   items: Item[];
   categories: { id: string; name: string }[];
+  bags: { id: string; name: string }[];
 }) {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState(ALL_CATEGORIES);
+  const [bagId, setBagId] = useState(ALL_BAGS);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
       if (categoryId !== ALL_CATEGORIES && item.category.id !== categoryId) return false;
+      if (bagId === NO_BAG_FILTER && item.defaultBag) return false;
+      if (bagId !== ALL_BAGS && bagId !== NO_BAG_FILTER && item.defaultBag?.id !== bagId) return false;
       if (!q) return true;
       return item.name.toLowerCase().includes(q) || (item.notes?.toLowerCase().includes(q) ?? false);
     });
-  }, [items, search, categoryId]);
+  }, [items, search, categoryId, bagId]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -76,6 +84,22 @@ export function ItemsTable({
             ))}
           </SelectContent>
         </Select>
+        {bags.length > 0 && (
+          <Select value={bagId} onValueChange={setBagId}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="All bags" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_BAGS}>All bags</SelectItem>
+              <SelectItem value={NO_BAG_FILTER}>No default bag</SelectItem>
+              {bags.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Table>
@@ -83,6 +107,7 @@ export function ItemsTable({
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Category</TableHead>
+            <TableHead>Bag</TableHead>
             <TableHead className="text-right">Default qty</TableHead>
             <TableHead>Notes</TableHead>
             <TableHead>Children</TableHead>
@@ -95,6 +120,7 @@ export function ItemsTable({
             <TableRow key={item.id} className={item.active ? "" : "text-muted-foreground"}>
               <TableCell>{item.name}</TableCell>
               <TableCell>{item.category.name}</TableCell>
+              <TableCell className="text-muted-foreground">{item.defaultBag?.name}</TableCell>
               <TableCell className="text-right">{item.defaultQuantity}</TableCell>
               <TableCell className="max-w-xs whitespace-normal text-muted-foreground">{item.notes}</TableCell>
               <TableCell className="max-w-xs whitespace-normal text-muted-foreground">
@@ -139,7 +165,7 @@ export function ItemsTable({
           ))}
           {filtered.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
+              <TableCell colSpan={8} className="text-center text-muted-foreground">
                 {items.length === 0 ? "No items yet." : "No items match your search/filter."}
               </TableCell>
             </TableRow>

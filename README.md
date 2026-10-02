@@ -203,6 +203,7 @@ Download either from Settings to try import, or use one as-is to seed a fresh da
 | `active` | No | `true` / `false`. Defaults to `true`. |
 | `modules` | No | Pipe-delimited Module names this Item belongs to. Modules are created automatically. |
 | `children` | No | Pipe-delimited **Item names** that are children of this Item (parent → children). Each name must match either another row's `name` in this file or an Item that already exists in your database — a reference to neither is a validation error. |
+| `default_bag` | No | Name of the Bag this Item goes in by default. Bags are created automatically. Blank leaves an existing Item's default Bag unchanged. |
 
 ### Import semantics
 

@@ -1,12 +1,14 @@
 import { getCurrentUser } from "@/lib/session";
 import { listItems } from "@/services/itemService";
 import { listCategories } from "@/services/categoryService";
+import { listBags } from "@/services/bagService";
 
 // Per-user data; must not be statically prerendered at build time.
 export const dynamic = "force-dynamic";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ActionForm } from "@/components/action-form";
 import {
   Select,
   SelectContent,
@@ -15,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ItemsTable } from "./items-table";
+import { DefaultBagSelect } from "./default-bag-select";
 import {
   createItemAction,
   createCategoryInlineAction,
@@ -23,9 +26,10 @@ import {
 
 export default async function ItemsPage() {
   const user = await getCurrentUser();
-  const [items, categories] = await Promise.all([
+  const [items, categories, bags] = await Promise.all([
     listItems(user.id),
     listCategories(user.id),
+    listBags(user.id),
   ]);
 
   return (
@@ -43,7 +47,7 @@ export default async function ItemsPage() {
           <Button type="submit">Add category</Button>
         </form>
       ) : (
-        <form action={createItemAction} className="flex flex-wrap items-end gap-3">
+        <ActionForm resetOnSuccess action={createItemAction} className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="name">Name</Label>
             <Input id="name" name="name" placeholder="e.g. Passport" required />
@@ -78,11 +82,12 @@ export default async function ItemsPage() {
             <Label htmlFor="notes">Notes</Label>
             <Input id="notes" name="notes" placeholder="optional" className="w-48" />
           </div>
+          {bags.length > 0 && <DefaultBagSelect bags={bags} />}
           <Button type="submit">Add item</Button>
-        </form>
+        </ActionForm>
       )}
 
-      <ItemsTable items={items} categories={categories} />
+      <ItemsTable items={items} categories={categories} bags={bags} />
 
       {items.length > 1 && (
         <form action={addChildAction} className="flex items-end gap-3">

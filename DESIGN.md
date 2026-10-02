@@ -1,7 +1,21 @@
 # Smart Packing Planner — Design & Requirements Document
 
-**Version:** 1.10
-**Supersedes:** 1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+**Version:** 1.11
+**Supersedes:** 1.10, 1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+
+---
+
+## Revision Summary (1.10 → 1.11)
+
+This revision turns Bags from per-Trip records into reusable master data, and lets each Item name a default Bag.
+
+1. **Bags are owner-level master data**, like Categories: one row per physical bag, managed on a new **Bags** page (name, type, color, weight limit, active). A Trip's bags are simply the Bags its items are assigned to; there is no per-Trip bag list to rebuild for every trip. Revised FR-021, FR-026.
+2. **Items have an optional Default Bag** (FR-022a). When an Item becomes a Trip Item — generation, a later Module merge, or adding specific Items (FR-019a) — its default Bag is copied onto the Trip Item as its assignment. Like the other snapshot fields (FR-014a), changing an Item's default later affects only future additions, and reassigning a Trip Item never changes the Item. Custom Trip Items start unassigned; "Save to Items" turns a custom item's trip bag into the new Item's default.
+3. **Retiring vs deleting.** An inactive Bag drops out of the bag pickers but stays on every Trip that uses it, so past packing history is unchanged. Deleting a Bag clears it as a default and unassigns its Trip Items everywhere, past Trips included.
+4. **One-off bags** are quick-created from the Trip page as ordinary master Bags (then optionally marked inactive), rather than as a second, Trip-only kind of bag.
+5. **CSV** gains an optional `default_bag` column (Bags auto-created by name, like Categories). **REST API** gains `GET /api/v1/bags`, and items include their default Bag.
+6. **Migration:** existing per-Trip bags became master Bags owned by their Trip's owner, with same-named bags of one owner merged and their Trip Items repointed, so no Trip lost its assignments. Duplicate Trip (FR-058) now copies assignments directly instead of recreating Bags.
+7. **Not built:** nested bags (a bag inside a bag). Every Trip Item has at most one Bag.
 
 ---
 
@@ -208,7 +222,9 @@ Each generated Trip Item supports: Quantity Override, Packed, Removed from Trip,
 
 Each Trip Item may optionally be assigned to a specific bag. Bag assignments are specific to a Trip and do not modify the master Item.
 
-**Bags per Trip** (e.g., Checked Suitcase, Carry-on, Camera Backpack, Personal Item, Day Pack, Dry Bag) have properties: Name, Bag Type, Color (optional), Weight Limit (optional), Current Weight (future).
+**Bags are master data (Revised in 1.11)** (e.g., Checked Suitcase, Carry-on, Camera Backpack, Pelican Case, Day Pack, Dry Bag): one record per physical bag, shared by every Trip, with properties Name, Bag Type, Color (optional), Weight Limit (optional), Active, Current Weight (future). A Trip's bags are the Bags its items are assigned to.
+
+**Default Bag (1.11):** each Item may name a default Bag. When the Item is added to a Trip, the Trip Item starts in that Bag; it can then be moved to any other Bag for that Trip only. Bags first needed on a specific Trip are quick-created from the Trip page as master Bags; an inactive Bag is hidden from pickers but remains on Trips that already use it.
 
 **Packing workflow:** mark an item packed, assign it to a bag, move it between bags. Packing status is independent of bag assignment.
 
@@ -234,7 +250,7 @@ Users can print a printer-friendly packing checklist from any Trip. The format m
 
 ## Data Import & Export (CSV) (Import: new in 1.2; Export: new in 1.4)
 
-Version 1 supports **CSV import and export** of the reusable master data — **Categories, Items (with parent/child relationships), and Modules (with membership)**. Import lets users migrate an existing packing list (typically a spreadsheet) into the application; export produces the same shape back out, so the two round-trip (export → edit offline → re-import, safe because import upserts by name). Trips and Bags are *not* imported or exported via CSV in either direction; Trips are generated from Modules and Bags are created per Trip — both remain runtime data.
+Version 1 supports **CSV import and export** of the reusable master data — **Categories, Items (with parent/child relationships), and Modules (with membership)**. Import lets users migrate an existing packing list (typically a spreadsheet) into the application; export produces the same shape back out, so the two round-trip (export → edit offline → re-import, safe because import upserts by name). Trips are *not* imported or exported via CSV in either direction; they are generated from Modules and remain runtime data. Bags appear only as each Item's `default_bag` name (1.11), auto-created like Categories.
 
 ### Why one denormalized file
 
@@ -257,6 +273,7 @@ The data model has three many-to-one / many-to-many relationships (Item→Catego
 | `active` | No | `true` / `false`. Defaults to `true`. |
 | `modules` | No | Pipe-delimited list of Module names this Item belongs to. Modules are created automatically if they do not exist. |
 | `children` | No | Pipe-delimited list of **Item names** that are children of this Item (parent → children direction, matching the source design). |
+| `default_bag` | No | Name of the Item's default Bag *(1.11)*. Bags are created automatically if they do not exist. Blank or absent leaves an existing Item's default Bag unchanged (consistent with import being additive), so re-importing an older file never clears defaults. |
 
 ### Example
 
@@ -370,7 +387,7 @@ PostgreSQL
 - **ItemService:** create/update items, manage default quantities, manage categories, manage parent/child relationships (recursive expansion, cycle-safe).
 - **ModuleService:** create modules, add items, auto-add required child items, prevent duplicate module items.
 - **PackingListService:** mark packed, update trip quantities, remove items from a trip, assign items to bags, filter and sort/group packing lists (including grouping for Bag View and for the print route). *(1.6: no separate PdfExportService — the print route is a presentation-only Server Component reusing this service's grouping/filtering; there is no PDF-generation step to encapsulate.)*
-- **BagService:** create bags for trips, assign items to bags, move items between bags.
+- **BagService:** manage master Bags (create, edit, activate/deactivate, delete); Trip Item assignment lives in TripService. *(1.11.)*
 - **ImportService:** parse and validate the Items CSV, preview results, and commit the two-pass import (upsert Items, auto-create Categories/Modules, wire parent/child, enforce the module child invariant) within a single transaction, scoped to the importing user.
 - **ExportService:** read a user's Categories, Items (with parent/child links), and Modules (with membership) and serialize them to the same Items CSV shape used for import, scoped to the exporting user. *(1.4.)*
 - **UserService:** admin-driven user creation, deactivation, and password reset; profile management (delegating credential handling to the auth framework — see below). No self-service signup.
@@ -538,12 +555,13 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 
 ### Bags
 
-- **FR-021** — The application shall allow creation of Bags for each Trip.
+- **FR-021** — The application shall allow creation of Bags as reusable master data shared by all of a user's Trips. *(Revised in 1.11: previously per Trip.)*
 - **FR-022** — Each Trip Item may optionally be assigned to one Bag.
+- **FR-022a** — Each Item may define a default Bag. When the Item is added to a Trip, the resulting Trip Item shall be assigned to that Bag. Later changes to the Item's default shall not alter existing Trips. *(1.11.)*
 - **FR-023** — Users shall be able to change an item's Bag Assignment at any time.
 - **FR-024** — The application shall provide a Bag View showing all packed items grouped by assigned Bag.
 - **FR-025** — Packing status shall be independent of Bag Assignment.
-- **FR-026** — Bag Assignments are specific to a Trip and shall not modify the master Item.
+- **FR-026** — Bag Assignments are specific to a Trip and shall not modify the master Item (including its default Bag). An inactive Bag shall remain visible on Trips that use it. *(1.11: clarified for master Bags.)*
 
 ### Print & export
 
@@ -585,7 +603,7 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 - **FR-055** — CSV import shall validate the entire file and present a row-level preview before committing, rejecting the import as a whole if any row fails validation (including unresolved child references, invalid quantities, and parent/child cycles). *(1.2.)*
 - **FR-056** — The application shall support backup and restoration using PostgreSQL backup utilities and Docker volume backup. *(Both approaches documented with exact, verified commands in README's "Backup & Restore" section — `pg_dump`/`psql` for a portable logical backup, plus a raw Docker volume tar for a full byte-for-byte copy. No in-app backup feature is needed: all state lives in the `db` container's volume, and `app`/`migrate` are stateless.)*
 - **FR-057** — The application shall support exporting master data (Categories, Items — including parent/child relationships and default quantities —, and Modules with membership) to the CSV format defined in Data Import & Export (CSV), for backup and migration purposes. *(1.4.)*
-- **FR-058** — Users shall be able to duplicate a Trip. The duplicate shall copy the source Trip's current (non-removed) Trip Items — including custom additions, quantity overrides, and any exclusions — and recreate its Bags with item-to-bag assignments preserved. Packed status shall reset to unpacked on the duplicate; Trip dates shall not be copied. *(1.8.)*
+- **FR-058** — Users shall be able to duplicate a Trip. The duplicate shall copy the source Trip's current (non-removed) Trip Items — including custom additions, quantity overrides, and any exclusions — with item-to-bag assignments preserved. Packed status shall reset to unpacked on the duplicate; Trip dates shall not be copied. *(1.8; 1.11: Bags are master data, so assignments are copied directly rather than Bags being recreated.)*
 
 ---
 
@@ -629,7 +647,7 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 
 ### UC-008 — Assign Items to Bags
 **Actor:** User.
-**Flow:** Generate a Trip → select Passport → assign Personal Item → select Camera → assign Camera Backpack → repeat.
+**Flow:** Generate a Trip → items with a default Bag are already assigned (1.11) → select Passport → assign Personal Item → select Camera → assign Camera Backpack → repeat for the rest.
 **Result:** The user can determine which bag contains any packed item.
 
 ### UC-009 — View Packing by Bag
@@ -715,7 +733,7 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 ### UC-020 — Duplicate a Trip
 **Actor:** User. **Scenario:** The user is planning a trip similar to one they've taken before and wants to start from what they actually packed last time, not regenerate from scratch.
 **Flow:** Trip History (or the Trip detail page) → Duplicate → confirm/edit the new trip's name, destination, and dates → Create duplicate.
-**System response:** `TripService.duplicateTrip` copies the source Trip's current Trip Items (custom additions, quantity overrides, and exclusions all preserved) and recreates its Bags with assignments intact, into a new Trip with packed status reset.
+**System response:** `TripService.duplicateTrip` copies the source Trip's current Trip Items (custom additions, quantity overrides, and exclusions all preserved) with bag assignments intact (1.11: Bags are shared master data, not recreated), into a new Trip with packed status reset.
 **Result:** A new Trip ready to pack from, without losing the customization built up on the original.
 
 ---

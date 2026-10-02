@@ -11,6 +11,7 @@ export const CSV_COLUMNS = [
   "active",
   "modules",
   "children",
+  "default_bag",
 ] as const;
 
 export const MULTI_VALUE_SEPARATOR = "|";
