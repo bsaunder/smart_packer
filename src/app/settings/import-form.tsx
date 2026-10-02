@@ -4,16 +4,26 @@ import { useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { ImportPreview } from "@/services/importService";
-import { previewImportAction, commitImportAction } from "./actions";
+import type { CsvImportResult } from "./actions";
 
 type Phase = "idle" | "previewing" | "previewed" | "committing" | "committed";
 
-export function ImportForm() {
+/** Validate-then-confirm CSV import, shared by the Items and Tasks CSVs. */
+export function ImportForm({
+  fileLabel,
+  inputId,
+  previewAction,
+  commitAction,
+}: {
+  fileLabel: string;
+  inputId: string;
+  previewAction: (csvText: string) => Promise<CsvImportResult>;
+  commitAction: (csvText: string) => Promise<CsvImportResult>;
+}) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [csvText, setCsvText] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [preview, setPreview] = useState<CsvImportResult | null>(null);
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,7 +46,7 @@ export function ImportForm() {
     if (!csvText) return;
     setPhase("previewing");
     startTransition(async () => {
-      const result = await previewImportAction(csvText);
+      const result = await previewAction(csvText);
       setPreview(result);
       setPhase("previewed");
     });
@@ -46,7 +56,7 @@ export function ImportForm() {
     if (!csvText) return;
     setPhase("committing");
     startTransition(async () => {
-      const result = await commitImportAction(csvText);
+      const result = await commitAction(csvText);
       setPreview(result);
       setPhase("committed");
     });
@@ -65,8 +75,8 @@ export function ImportForm() {
   return (
     <div className="flex flex-col gap-4 rounded-lg border p-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="csv-file">Items CSV file</Label>
-        <Input id="csv-file" type="file" accept=".csv,text/csv" ref={fileInputRef} onChange={handleFileChange} />
+        <Label htmlFor={inputId}>{fileLabel}</Label>
+        <Input id={inputId} type="file" accept=".csv,text/csv" ref={fileInputRef} onChange={handleFileChange} />
       </div>
 
       {csvText && phase !== "committed" && (
@@ -105,19 +115,9 @@ export function ImportForm() {
               <p className="font-medium text-foreground">
                 {phase === "committed" ? "Import complete." : "Valid — ready to import."}
               </p>
-              <p>
-                {preview.summary.itemsToCreate} item{preview.summary.itemsToCreate === 1 ? "" : "s"} to create,{" "}
-                {preview.summary.itemsToUpdate} to update.
-              </p>
-              {preview.summary.categoriesToCreate.length > 0 && (
-                <p>New categories: {preview.summary.categoriesToCreate.join(", ")}</p>
-              )}
-              {preview.summary.modulesToCreate.length > 0 && (
-                <p>New modules: {preview.summary.modulesToCreate.join(", ")}</p>
-              )}
-              {preview.summary.bagsToCreate.length > 0 && (
-                <p>New bags: {preview.summary.bagsToCreate.join(", ")}</p>
-              )}
+              {preview.summary.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
             </div>
           )}
         </div>

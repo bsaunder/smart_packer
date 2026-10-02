@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
-import { duplicateNameResult, type ActionResult } from "@/lib/errors";
+import { userErrorResult, type ActionResult } from "@/lib/errors";
 import { updateItem } from "@/services/itemService";
 import { parseDefaultBagId } from "../../default-bag-select";
 
@@ -21,7 +21,7 @@ export async function updateItemAction(formData: FormData): Promise<ActionResult
   try {
     await updateItem(user.id, itemId, { name, categoryId, defaultQuantity, notes, active, defaultBagId });
   } catch (e) {
-    return duplicateNameResult(e);
+    return userErrorResult(e);
   }
 
   revalidatePath("/items");

@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { getDescendantIds } from "@/services/itemService";
 import { findOrCreateCategoryByName } from "@/services/categoryService";
 import { assertOwnsBag } from "@/services/bagService";
+import { mergeModuleTasksIntoTrip } from "@/services/tripTaskService";
+import { dueDate } from "@/lib/taskTiming";
 
 export async function listTrips(ownerId: string) {
   return prisma.trip.findMany({
@@ -76,6 +78,7 @@ export async function getTrip(ownerId: string, tripId: string) {
     where: { id: tripId, ownerId },
     include: {
       tripItems: { include: { bag: true }, orderBy: { name: "asc" } },
+      tripTasks: { orderBy: { name: "asc" } },
     },
   });
   if (!trip) return null;
@@ -112,6 +115,19 @@ export function serializeTripDetail(trip: NonNullable<Awaited<ReturnType<typeof 
         packed: ti.packed,
         bag: ti.bag?.name ?? null,
         notes: ti.notes,
+      })),
+    tasks: trip.tripTasks
+      .filter((tt) => !tt.removed)
+      .map((tt) => ({
+        id: tt.id,
+        parentId: tt.parentId,
+        name: tt.name,
+        relativeTo: tt.anchor === "DEPARTURE" ? "departure" : "return",
+        offsetDays: tt.offsetDays,
+        dueDate: dueDate(trip, tt.anchor, tt.offsetDays),
+        done: tt.done,
+        doneAt: tt.doneAt,
+        notes: tt.notes,
       })),
   };
 }
@@ -179,6 +195,7 @@ export async function duplicateTrip(
     where: { id: sourceTripId, ownerId },
     include: {
       tripItems: { where: { removed: false } },
+      tripTasks: { where: { removed: false } },
     },
   });
   if (!source) throw new Error("Trip not found for this owner.");
@@ -209,6 +226,25 @@ export async function duplicateTrip(
           packed: false,
         })),
       });
+    }
+
+    // Tasks: same snapshot, unchecked, with sub-task links remapped to the
+    // new Trip's rows (parents first so their new ids exist).
+    const taskIdMap = new Map<string, string>();
+    const tasks = [...source.tripTasks].sort((a, b) => Number(!!a.parentId) - Number(!!b.parentId));
+    for (const task of tasks) {
+      const created = await tx.tripTask.create({
+        data: {
+          tripId: newTrip.id,
+          sourceTaskId: task.sourceTaskId,
+          parentId: task.parentId ? (taskIdMap.get(task.parentId) ?? null) : null,
+          name: task.name,
+          notes: task.notes,
+          anchor: task.anchor,
+          offsetDays: task.offsetDays,
+        },
+      });
+      taskIdMap.set(task.id, created.id);
     }
 
     return newTrip;
@@ -246,7 +282,9 @@ export async function generatePackingList(
     );
   }
 
-  return mergeItemsIntoTrip(ownerId, tripId, moduleIds);
+  const items = await mergeItemsIntoTrip(ownerId, tripId, moduleIds);
+  const tasks = await mergeModuleTasksIntoTrip(ownerId, tripId, moduleIds);
+  return { added: items.added, tasksAdded: tasks.added };
 }
 
 /** Adds one or more additional Modules to an existing Trip (FR-016a). */
@@ -258,7 +296,9 @@ export async function addModulesToTrip(
   const trip = await prisma.trip.findFirst({ where: { id: tripId, ownerId } });
   if (!trip) throw new Error("Trip not found for this owner.");
 
-  return mergeItemsIntoTrip(ownerId, tripId, moduleIds);
+  const items = await mergeItemsIntoTrip(ownerId, tripId, moduleIds);
+  const tasks = await mergeModuleTasksIntoTrip(ownerId, tripId, moduleIds);
+  return { added: items.added, tasksAdded: tasks.added };
 }
 
 /**

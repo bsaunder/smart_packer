@@ -10,8 +10,10 @@ import {
   type ViewParams,
 } from "@/lib/packingListView";
 import { PrintButton } from "./print-button";
+import { formatDate } from "@/lib/formatDate";
+import { dueDate, groupTasks, type Anchor } from "@/lib/taskTiming";
 
-type PrintParams = ViewParams & { notes?: string; bags?: string; theme?: string; blank?: string };
+type PrintParams = ViewParams & { notes?: string; bags?: string; theme?: string; blank?: string; tasks?: string };
 
 const THEME_CLASSES: Record<string, string> = {
   compact: "text-xs [&_.print-category]:mb-3",
@@ -32,6 +34,8 @@ export default async function TripPrintPage({
   const includeNotes = raw.notes === "1";
   const includeBags = raw.bags === "1";
   const blank = raw.blank === "1";
+  // Tasks print by default (Pre-Departure first, After Return last); tasks=0 omits them.
+  const includeTasks = raw.tasks !== "0";
   const theme = raw.theme === "compact" || raw.theme === "large" ? raw.theme : "standard";
 
   const user = await getCurrentUser();
@@ -49,10 +53,12 @@ export default async function TripPrintPage({
     const bags = overrides.bags ?? raw.bags;
     const th = overrides.theme ?? raw.theme;
     const bl = overrides.blank ?? raw.blank;
+    const tk = overrides.tasks ?? raw.tasks;
     if (notes === "1") params.set("notes", "1");
     if (bags === "1") params.set("bags", "1");
     if (th && th !== "standard") params.set("theme", th);
     if (bl === "1") params.set("blank", "1");
+    if (tk === "0") params.set("tasks", "0");
     const qs = params.toString();
     return `${path}${qs ? `?${qs}` : ""}`;
   }
@@ -92,6 +98,9 @@ export default async function TripPrintPage({
           <Link href={optionLink({ blank: blank ? "" : "1" })} className={blank ? "font-medium" : "text-muted-foreground"}>
             Blank checklist
           </Link>
+          <Link href={optionLink({ tasks: includeTasks ? "0" : "" })} className={includeTasks ? "font-medium" : "text-muted-foreground"}>
+            Tasks
+          </Link>
         </div>
         <PrintButton />
       </div>
@@ -102,6 +111,10 @@ export default async function TripPrintPage({
           {trip.destination && <p>{trip.destination}</p>}
           <p className="text-muted-foreground">Printed {printDate}</p>
         </div>
+
+        {includeTasks && (
+          <PrintTasks title="Pre-Departure" anchor="DEPARTURE" trip={trip} blank={blank} includeNotes={includeNotes} />
+        )}
 
         <div className="print-checklist">
           {[...groups.entries()].map(([groupName, items]) => (
@@ -127,7 +140,75 @@ export default async function TripPrintPage({
             </div>
           ))}
         </div>
+
+        {includeTasks && (
+          <PrintTasks title="After Return" anchor="RETURN" trip={trip} blank={blank} includeNotes={includeNotes} />
+        )}
       </div>
     </div>
+  );
+}
+
+type PrintTrip = NonNullable<Awaited<ReturnType<typeof getTrip>>>;
+
+/** One task checklist, printed as its own section in the same two-column layout as the packing list. */
+function PrintTasks({
+  title,
+  anchor,
+  trip,
+  blank,
+  includeNotes,
+}: {
+  title: string;
+  anchor: Anchor;
+  trip: PrintTrip;
+  blank: boolean;
+  includeNotes: boolean;
+}) {
+  const groups = groupTasks(trip.tripTasks.filter((t) => !t.removed), anchor);
+  if (groups.length === 0) return null;
+
+  const row = (t: PrintTrip["tripTasks"][number], parentName?: string) => (
+    <div className="print-item">
+      <input type="checkbox" checked={!blank && t.done} readOnly />
+      <span>
+        {t.name}
+        {parentName ? ` · ${parentName}` : ""}
+        {includeNotes && t.notes ? ` (${t.notes})` : ""}
+      </span>
+    </div>
+  );
+
+  return (
+    <section className="mb-4">
+      <h2 className="mb-2 text-base font-semibold">{title}</h2>
+      <div className="print-checklist">
+        {groups.map((group) => {
+          const due = dueDate(trip, anchor, group.days);
+          return (
+            <div key={group.days} className="print-category">
+              <h3 className="mb-1 font-medium">
+                {group.label}
+                {due && <span className="font-normal text-muted-foreground"> · {formatDate(due)}</span>}
+              </h3>
+              <ul className="flex flex-col gap-1">
+                {group.tasks.map(({ task, children, parentName }) => (
+                  <li key={task.id} className="flex flex-col gap-1">
+                    {row(task, parentName)}
+                    {children.length > 0 && (
+                      <ul className="ml-5 flex flex-col gap-1">
+                        {children.map((child) => (
+                          <li key={child.id}>{row(child)}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

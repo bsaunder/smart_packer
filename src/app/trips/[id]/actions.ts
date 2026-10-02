@@ -13,6 +13,9 @@ import {
   setTripItemQuantity,
 } from "@/services/tripService";
 import { findOrCreateBagByName } from "@/services/bagService";
+import { addCustomTripTask, addTasksToTrip, removeTripTask, setTripTaskDone } from "@/services/tripTaskService";
+import { parseTiming } from "@/lib/taskTiming";
+import type { ActionResult } from "@/lib/errors";
 import { findOrCreateCategoryByName } from "@/services/categoryService";
 
 export async function togglePackedAction(formData: FormData) {
@@ -113,5 +116,47 @@ export async function createBagAction(formData: FormData) {
   if (!tripId || !name) return;
 
   await findOrCreateBagByName(user.id, name);
+  revalidatePath(`/trips/${tripId}`);
+}
+
+export async function toggleTaskDoneAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const tripTaskId = String(formData.get("tripTaskId") ?? "");
+  const tripId = String(formData.get("tripId") ?? "");
+  if (!tripTaskId) return;
+
+  await setTripTaskDone(user.id, tripTaskId, formData.get("done") === "true");
+  revalidatePath(`/trips/${tripId}`);
+}
+
+export async function removeTripTaskAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const tripTaskId = String(formData.get("tripTaskId") ?? "");
+  const tripId = String(formData.get("tripId") ?? "");
+  if (!tripTaskId) return;
+
+  await removeTripTask(user.id, tripTaskId);
+  revalidatePath(`/trips/${tripId}`);
+}
+
+export async function addTasksToTripAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const tripId = String(formData.get("tripId") ?? "");
+  const taskIds = formData.getAll("taskIds").map(String);
+  if (!tripId || taskIds.length === 0) return;
+
+  await addTasksToTrip(user.id, tripId, taskIds);
+  revalidatePath(`/trips/${tripId}`);
+}
+
+export async function addCustomTaskAction(formData: FormData): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  const tripId = String(formData.get("tripId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const timing = parseTiming(formData);
+  if (!tripId || !name) return;
+  if (!timing || timing.offsetDays === null) return { error: "Enter a whole number of days (0 or more)." };
+
+  await addCustomTripTask(user.id, tripId, { name, anchor: timing.anchor, offsetDays: timing.offsetDays });
   revalidatePath(`/trips/${tripId}`);
 }

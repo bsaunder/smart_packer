@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentAdmin } from "@/lib/session";
 import { createUser, setUserActive, resetUserPassword } from "@/services/userService";
-import { duplicateNameResult, type ActionResult } from "@/lib/errors";
+import { userErrorResult, type ActionResult } from "@/lib/errors";
 
 export async function createUserAction(formData: FormData): Promise<ActionResult> {
   await getCurrentAdmin();
@@ -15,7 +15,7 @@ export async function createUserAction(formData: FormData): Promise<ActionResult
   try {
     await createUser({ username, password, isAdmin });
   } catch (e) {
-    return duplicateNameResult(e);
+    return userErrorResult(e);
   }
   revalidatePath("/admin/users");
 }

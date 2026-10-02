@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
 import { createBag, deleteBag, setBagActive, updateBag } from "@/services/bagService";
-import { duplicateNameResult, type ActionResult } from "@/lib/errors";
+import { userErrorResult, type ActionResult } from "@/lib/errors";
 
 function bagInput(formData: FormData) {
   const rawWeightLimit = String(formData.get("weightLimit") ?? "").trim();
@@ -23,7 +23,7 @@ export async function createBagAction(formData: FormData): Promise<ActionResult>
   try {
     await createBag(user.id, input);
   } catch (e) {
-    return duplicateNameResult(e);
+    return userErrorResult(e);
   }
   revalidatePath("/bags");
 }
@@ -37,7 +37,7 @@ export async function updateBagAction(formData: FormData): Promise<ActionResult>
   try {
     await updateBag(user.id, bagId, input);
   } catch (e) {
-    return duplicateNameResult(e);
+    return userErrorResult(e);
   }
   revalidatePath("/bags");
 }

@@ -37,6 +37,7 @@ model User {
   modules    Module[]
   trips      Trip[]
   bags       Bag[]
+  tasks      Task[]
   apiKeys    ApiKey[]
 }
 
@@ -145,6 +146,7 @@ model Module {
   name    String
 
   moduleItems ModuleItem[]
+  moduleTasks ModuleTask[]
 
   @@unique([ownerId, name])
   @@index([ownerId])
@@ -171,6 +173,7 @@ model Trip {
   createdAt   DateTime  @default(now())
 
   tripItems TripItem[]
+  tripTasks TripTask[]
 
   @@index([ownerId])
 }
@@ -237,4 +240,72 @@ model ApiKey {
   lastUsedAt DateTime?
 
   @@index([ownerId])
+}
+
+// Pre-trip / post-trip checklist (1.12). Timing is relative to the Trip:
+// `offsetDays` before departure (startDate) or after return (endDate).
+enum TaskAnchor {
+  DEPARTURE
+  RETURN
+}
+
+// Master Task, like Item: reusable, reaches a Trip via Modules or directly.
+// One level of sub-tasks: a sub-task's parent is always top-level, and a
+// sub-task always shares its parent's anchor.
+model Task {
+  id         String     @id @default(cuid())
+  ownerId    String
+  owner      User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name       String
+  notes      String?
+  active     Boolean    @default(true)
+  anchor     TaskAnchor @default(DEPARTURE)
+  // Null only on a sub-task, meaning "same timing as its parent".
+  offsetDays Int?
+  parentId   String?
+  parent     Task?      @relation("TaskChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children   Task[]     @relation("TaskChildren")
+
+  moduleTasks ModuleTask[]
+  tripTasks   TripTask[]
+
+  @@unique([ownerId, name])
+  @@index([ownerId])
+  @@index([parentId])
+}
+
+model ModuleTask {
+  moduleId String
+  module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  taskId   String
+  task     Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([moduleId, taskId])
+  @@index([taskId])
+}
+
+// Snapshot of a Task on one Trip (like TripItem): timing is resolved to a
+// concrete offset at creation, so later master edits don't change the Trip.
+model TripTask {
+  id           String     @id @default(cuid())
+  tripId       String
+  trip         Trip       @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  sourceTaskId String?
+  sourceTask   Task?      @relation(fields: [sourceTaskId], references: [id], onDelete: SetNull)
+  parentId     String?
+  parent       TripTask?  @relation("TripTaskChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children     TripTask[] @relation("TripTaskChildren")
+
+  name       String
+  notes      String?
+  anchor     TaskAnchor
+  offsetDays Int
+
+  done    Boolean   @default(false)
+  doneAt  DateTime?
+  removed Boolean   @default(false)
+
+  @@index([tripId])
+  @@index([sourceTaskId])
+  @@index([parentId])
 }

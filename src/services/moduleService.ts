@@ -7,7 +7,10 @@ const nameTaken = (name: string) => `You already have a module named "${name}".`
 export async function listModules(ownerId: string) {
   return prisma.module.findMany({
     where: { ownerId },
-    include: { moduleItems: { include: { item: true } } },
+    include: {
+      moduleItems: { include: { item: true } },
+      moduleTasks: { include: { task: true } },
+    },
     orderBy: { name: "asc" },
   });
 }
@@ -77,4 +80,28 @@ export async function removeItemFromModule(
   if (!owned) throw new Error("Module not found for this owner.");
 
   await prisma.moduleItem.deleteMany({ where: { moduleId, itemId } });
+}
+
+/**
+ * Adds a Task to a Module. Unlike Items, sub-tasks aren't copied into the
+ * Module: a Task always brings its active sub-tasks when it reaches a Trip.
+ */
+export async function addTaskToModule(ownerId: string, moduleId: string, taskId: string) {
+  const [module, task] = await Promise.all([
+    prisma.module.count({ where: { id: moduleId, ownerId } }),
+    prisma.task.count({ where: { id: taskId, ownerId } }),
+  ]);
+  if (!module || !task) throw new Error("Module or task not found for this owner.");
+
+  await prisma.moduleTask.upsert({
+    where: { moduleId_taskId: { moduleId, taskId } },
+    create: { moduleId, taskId },
+    update: {},
+  });
+}
+
+export async function removeTaskFromModule(ownerId: string, moduleId: string, taskId: string) {
+  const owned = await prisma.module.count({ where: { id: moduleId, ownerId } });
+  if (!owned) throw new Error("Module not found for this owner.");
+  await prisma.moduleTask.deleteMany({ where: { moduleId, taskId } });
 }

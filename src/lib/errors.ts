@@ -1,9 +1,15 @@
 /**
- * A name that must be unique (per owner for Categories, Items, Modules, and
- * Bags; globally for usernames) is already taken. Carries a message meant
- * for the user, unlike a raw database error.
+ * An error whose message is meant for the user (a rule they can fix by
+ * changing their input), as opposed to a bug or infrastructure failure.
+ * Server actions return these to the form as `{ error }`.
  */
-export class DuplicateNameError extends Error {}
+export class UserError extends Error {}
+
+/**
+ * A name that must be unique (per owner for Categories, Items, Modules,
+ * Bags, and Tasks; globally for usernames) is already taken.
+ */
+export class DuplicateNameError extends UserError {}
 
 /** What a form's server action returns: nothing on success, or a message to show. */
 export type ActionResult = { error: string } | undefined | void;
@@ -23,8 +29,8 @@ export async function uniqueName<T>(operation: Promise<T>, message: string): Pro
   }
 }
 
-/** For server actions: a DuplicateNameError becomes `{ error }` for the form; anything else rethrows. */
-export function duplicateNameResult(e: unknown): ActionResult {
-  if (e instanceof DuplicateNameError) return { error: e.message };
+/** For server actions: a UserError becomes `{ error }` for the form; anything else rethrows. */
+export function userErrorResult(e: unknown): ActionResult {
+  if (e instanceof UserError) return { error: e.message };
   throw e;
 }

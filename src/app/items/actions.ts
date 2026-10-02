@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
-import { duplicateNameResult, type ActionResult } from "@/lib/errors";
+import { userErrorResult, type ActionResult } from "@/lib/errors";
 import { createItem, addChildItem, updateItem, deleteItem } from "@/services/itemService";
 import { findOrCreateCategoryByName } from "@/services/categoryService";
 import { parseDefaultBagId } from "./default-bag-select";
@@ -19,7 +19,7 @@ export async function createItemAction(formData: FormData): Promise<ActionResult
   try {
     await createItem(user.id, { name, categoryId, defaultQuantity, notes, defaultBagId });
   } catch (e) {
-    return duplicateNameResult(e);
+    return userErrorResult(e);
   }
   revalidatePath("/items");
 }

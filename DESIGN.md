@@ -1,7 +1,22 @@
 # Smart Packing Planner — Design & Requirements Document
 
-**Version:** 1.11
-**Supersedes:** 1.10, 1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+**Version:** 1.12
+**Supersedes:** 1.11, 1.10, 1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0
+
+---
+
+## Revision Summary (1.11 → 1.12)
+
+This revision adds **Tasks**: a pre-departure (and after-return) checklist that sits alongside the packing list — "take out the garbage", "board the dog", "update the ACR beacon registration" — each timed relative to the Trip's dates. See "Pre-Trip & Post-Trip Tasks".
+
+1. **Master Tasks** (new Tasks page): name, notes, active, and timing — a number of days before departure (Trip start date) or after return (end date, else start date). Presets match the common cases (day of / day before / week before / 2 weeks / 4 weeks / 3 months before departure; day of / day after / week after return); any other day count is allowed. FR-059.
+2. **One level of sub-tasks** (e.g. "Pets" → Clean Litter Box, Refill Cat Feeder, Board Dog). A sub-task always shares its parent's checklist (Pre-Departure / After Return) and either inherits the parent's timing or has its own. Checkboxes are independent. FR-060.
+3. **Reaching a Trip** mirrors Items: Modules contain Tasks as well as Items, so Trip generation and later Module merges bring Tasks (with their active sub-tasks); specific Tasks can be added by search; one-off custom Tasks can be added to a single Trip. Trip Tasks are snapshots (like FR-014a), with timing resolved to a concrete offset. Inactive Tasks never reach a Trip. FR-061.
+4. **Trip page:** a Pre-Departure checklist first, grouped by timeframe in the order things happen, with each group's due date (when the Trip has dates) and overdue highlighting; an After Return checklist after the packing list. Removing a Task removes its sub-tasks from that Trip. FR-062.
+5. **Printing:** Pre-Departure always prints before the packing list and After Return after it, both with due dates; a print option omits them. FR-063.
+6. **Dashboard "Due Soon":** unfinished Trip Tasks due within a week or overdue (always while the Trip hasn't ended; for two weeks after it has). No email/push reminders — the app has no mail server. FR-064.
+7. **Duplicate Trip** copies Tasks unchecked with sub-task nesting kept; the Trip JSON export and REST API include Tasks with due dates; `GET /api/v1/tasks` added.
+8. **Tasks CSV** (separate from the Items CSV): `name, days, relative_to, parent, modules, notes, active`, same validate-then-commit, upsert-by-name, additive semantics. FR-065.
 
 ---
 
@@ -232,6 +247,22 @@ Each Trip Item may optionally be assigned to a specific bag. Bag assignments are
 
 ---
 
+## Pre-Trip & Post-Trip Tasks (New in 1.12)
+
+Tasks are things to *do* rather than things to *pack*: chores before leaving (take out the garbage, refill the cat feeder, lock the garage), preparation weeks ahead (immunizations, firmware updates, informing banks), and follow-ups after getting home (pick up the dog, upload photos).
+
+**Master Tasks** have: Name, Notes (optional), Active, and **timing** — `offsetDays` before **departure** (the Trip's start date) or after **return** (its end date, falling back to the start date). Timeframe headings derive from the day count: 0 → "Day Of Departure", 1 → "Day Before Departure", 7 → "Week Before Departure", multiples of 30 → "N Months …", multiples of 7 → "N Weeks …", otherwise "N Days …" (and "… After Return" for return tasks).
+
+**Sub-tasks:** one level deep. A sub-task's parent is always top-level, a task with sub-tasks can't itself become a sub-task, and a sub-task always shares its parent's anchor (departure/return). A sub-task's timing is either inherited (`offsetDays` null) or its own; on a Trip it's listed under its parent when the two share timing, otherwise in its own timeframe group with the parent's name for context. Deleting a parent Task turns its sub-tasks into top-level Tasks, first giving inheriting ones the parent's timing.
+
+**Reaching a Trip** follows the Item model: Modules contain Tasks (generation and later Module merges bring them, with their active sub-tasks); Tasks can be added individually by search (restoring any previously removed from that Trip); and one-off custom Tasks can be added to a single Trip. **Trip Tasks are snapshots** — name, notes, anchor, and the *resolved* offset are copied, so later master edits don't change existing Trips. Inactive Tasks never reach a Trip.
+
+**On a Trip:** Pre-Departure appears first, grouped by timeframe from earliest to day-of, with the due date per group when the Trip has dates and overdue groups (unfinished tasks past their due date) highlighted. After Return appears after the packing list. Each task is checked off independently; removing a task from a Trip also removes its sub-tasks there (unlike child Items, sub-tasks belong to one parent only).
+
+**Due Soon (Dashboard):** unfinished Trip Tasks due within the next 7 days, plus overdue ones — always while their Trip hasn't ended, and for 14 days after it has (so a forgotten task from an old trip doesn't linger). The app sends no email or push reminders.
+
+---
+
 ## Print & Export (Revised in 1.6)
 
 Users can print a printer-friendly packing checklist from any Trip. The format minimizes paper use while remaining easy to read and check off by hand. **There is no server-generated PDF file** — the checklist is a dedicated, print-styled page; the user prints it (or uses their browser's "Save as PDF" print destination) directly. This is a deliberate simplification over 1.1–1.5's Playwright/Chromium approach — see Revision Summary (1.5 → 1.6) and "Printable Layout — Rendering Approach".
@@ -387,6 +418,7 @@ PostgreSQL
 - **ItemService:** create/update items, manage default quantities, manage categories, manage parent/child relationships (recursive expansion, cycle-safe).
 - **ModuleService:** create modules, add items, auto-add required child items, prevent duplicate module items.
 - **PackingListService:** mark packed, update trip quantities, remove items from a trip, assign items to bags, filter and sort/group packing lists (including grouping for Bag View and for the print route). *(1.6: no separate PdfExportService — the print route is a presentation-only Server Component reusing this service's grouping/filtering; there is no PDF-generation step to encapsulate.)*
+- **TaskService / TripTaskService:** manage master Tasks (sub-task rules, anchor inheritance); snapshot Tasks onto Trips via Modules or directly, check off / remove Trip Tasks, compute Due Soon. *(1.12.)*
 - **BagService:** manage master Bags (create, edit, activate/deactivate, delete); Trip Item assignment lives in TripService. *(1.11.)*
 - **ImportService:** parse and validate the Items CSV, preview results, and commit the two-pass import (upsert Items, auto-create Categories/Modules, wire parent/child, enforce the module child invariant) within a single transaction, scoped to the importing user.
 - **ExportService:** read a user's Categories, Items (with parent/child links), and Modules (with membership) and serialize them to the same Items CSV shape used for import, scoped to the exporting user. *(1.4.)*
@@ -563,6 +595,16 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 - **FR-025** — Packing status shall be independent of Bag Assignment.
 - **FR-026** — Bag Assignments are specific to a Trip and shall not modify the master Item (including its default Bag). An inactive Bag shall remain visible on Trips that use it. *(1.11: clarified for master Bags.)*
 
+### Pre-trip & post-trip tasks (1.12)
+
+- **FR-059** — The application shall allow creation of Tasks, each timed as a number of days before a Trip's departure or after its return.
+- **FR-060** — A Task may have sub-tasks, one level deep. A sub-task shall share its parent's departure/return anchor and may inherit its timing.
+- **FR-061** — Modules may contain Tasks. Trip generation and Module merges shall add a Module's active Tasks (with their active sub-tasks) to the Trip; users may also add specific Tasks, or one-off custom Tasks, to a Trip. Trip Tasks shall be snapshots unaffected by later master edits.
+- **FR-062** — The Trip page shall show a Pre-Departure checklist before the packing list and an After Return checklist after it, grouped by timeframe with due dates when the Trip has dates, and shall flag overdue tasks.
+- **FR-063** — The printed checklist shall include Pre-Departure tasks before the packing list and After Return tasks after it, unless the user opts out.
+- **FR-064** — The Dashboard shall list unfinished Trip Tasks that are due soon or overdue.
+- **FR-065** — Master Tasks shall be importable and exportable via a Tasks CSV (`name, days, relative_to, parent, modules, notes, active`), validated as a whole before commit and upserted by name.
+
 ### Print & export
 
 - **FR-027** — The application shall render a printable packing checklist for any Trip.
@@ -603,7 +645,7 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 - **FR-055** — CSV import shall validate the entire file and present a row-level preview before committing, rejecting the import as a whole if any row fails validation (including unresolved child references, invalid quantities, and parent/child cycles). *(1.2.)*
 - **FR-056** — The application shall support backup and restoration using PostgreSQL backup utilities and Docker volume backup. *(Both approaches documented with exact, verified commands in README's "Backup & Restore" section — `pg_dump`/`psql` for a portable logical backup, plus a raw Docker volume tar for a full byte-for-byte copy. No in-app backup feature is needed: all state lives in the `db` container's volume, and `app`/`migrate` are stateless.)*
 - **FR-057** — The application shall support exporting master data (Categories, Items — including parent/child relationships and default quantities —, and Modules with membership) to the CSV format defined in Data Import & Export (CSV), for backup and migration purposes. *(1.4.)*
-- **FR-058** — Users shall be able to duplicate a Trip. The duplicate shall copy the source Trip's current (non-removed) Trip Items — including custom additions, quantity overrides, and any exclusions — with item-to-bag assignments preserved. Packed status shall reset to unpacked on the duplicate; Trip dates shall not be copied. *(1.8; 1.11: Bags are master data, so assignments are copied directly rather than Bags being recreated.)*
+- **FR-058** — Users shall be able to duplicate a Trip. The duplicate shall copy the source Trip's current (non-removed) Trip Items — including custom additions, quantity overrides, and any exclusions — with item-to-bag assignments preserved. Packed status shall reset to unpacked on the duplicate; Trip dates shall not be copied. *(1.8; 1.11: Bags are master data, so assignments are copied directly rather than Bags being recreated; 1.12: Trip Tasks are copied too, unchecked.)*
 
 ---
 
@@ -735,6 +777,12 @@ Target capacity: 100+ users, 10,000+ master items, 1,000+ trips, 100+ modules, 1
 **Flow:** Trip History (or the Trip detail page) → Duplicate → confirm/edit the new trip's name, destination, and dates → Create duplicate.
 **System response:** `TripService.duplicateTrip` copies the source Trip's current Trip Items (custom additions, quantity overrides, and exclusions all preserved) with bag assignments intact (1.11: Bags are shared master data, not recreated), into a new Trip with packed status reset.
 **Result:** A new Trip ready to pack from, without losing the customization built up on the original.
+
+### UC-021 — Work Through a Pre-Departure Checklist
+**Actor:** User. **Scenario:** A dive trip leaves in a week; the user wants to know what to do and when.
+**Flow:** Create the Trip with start/end dates and the "Every Trip", "Pets", and "Scuba Diving" Modules → the Trip page opens with a Pre-Departure checklist (e.g. "4 Weeks Before Departure: Test all Dive Gear", "Day Before Departure: Pets → Clean Litter Box, Board Dog") → check tasks off as they're done; the Dashboard's Due Soon lists what's due this week or overdue.
+**System response:** `TripService.generatePackingList` snapshots the Modules' Items and Tasks; due dates come from the Trip's dates (FR-059–FR-064).
+**Result:** Nothing time-sensitive is forgotten, and the printed checklist starts with the Pre-Departure tasks.
 
 ---
 

@@ -2,13 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
-import { duplicateNameResult, type ActionResult } from "@/lib/errors";
+import { userErrorResult, type ActionResult } from "@/lib/errors";
 import {
   createModule,
   addItemToModule,
   removeItemFromModule,
   renameModule,
   deleteModule,
+  addTaskToModule,
+  removeTaskFromModule,
 } from "@/services/moduleService";
 
 export async function createModuleAction(formData: FormData): Promise<ActionResult> {
@@ -19,7 +21,7 @@ export async function createModuleAction(formData: FormData): Promise<ActionResu
   try {
     await createModule(user.id, { name });
   } catch (e) {
-    return duplicateNameResult(e);
+    return userErrorResult(e);
   }
   revalidatePath("/modules");
 }
@@ -43,7 +45,7 @@ export async function renameModuleAction(formData: FormData): Promise<ActionResu
   try {
     await renameModule(user.id, moduleId, name);
   } catch (e) {
-    return duplicateNameResult(e);
+    return userErrorResult(e);
   }
   revalidatePath("/modules");
 }
@@ -64,5 +66,25 @@ export async function removeItemFromModuleAction(formData: FormData) {
   if (!moduleId || !itemId) return;
 
   await removeItemFromModule(user.id, moduleId, itemId);
+  revalidatePath("/modules");
+}
+
+export async function addTaskToModuleAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const moduleId = String(formData.get("moduleId") ?? "");
+  const taskId = String(formData.get("taskId") ?? "");
+  if (!moduleId || !taskId) return;
+
+  await addTaskToModule(user.id, moduleId, taskId);
+  revalidatePath("/modules");
+}
+
+export async function removeTaskFromModuleAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const moduleId = String(formData.get("moduleId") ?? "");
+  const taskId = String(formData.get("taskId") ?? "");
+  if (!moduleId || !taskId) return;
+
+  await removeTaskFromModule(user.id, moduleId, taskId);
   revalidatePath("/modules");
 }

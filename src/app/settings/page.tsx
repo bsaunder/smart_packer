@@ -1,5 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { ImportForm } from "./import-form";
+import {
+  commitItemsImportAction,
+  commitTasksImportAction,
+  previewItemsImportAction,
+  previewTasksImportAction,
+} from "./actions";
 import { ThemeToggle } from "./theme-toggle";
 import { ChangePasswordForm } from "./change-password-form";
 import { ApiKeysManager } from "./api-keys-manager";
@@ -62,7 +68,34 @@ export default async function SettingsPage() {
             fix any listed issues and re-upload if validation fails.
           </p>
         </div>
-        <ImportForm />
+        <ImportForm
+          fileLabel="Items CSV file"
+          inputId="items-csv-file"
+          previewAction={previewItemsImportAction}
+          commitAction={commitItemsImportAction}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-medium">Tasks CSV</h2>
+          <p className="text-sm text-muted-foreground">
+            Your pre-departure / after-return Tasks as a separate CSV, with columns{" "}
+            <code>name, days, relative_to, parent, modules, notes, active</code>. Download it as a starting
+            template or backup; import upserts by name and never removes anything.
+          </p>
+        </div>
+        <Button asChild variant="outline" className="w-fit">
+          <a href="/settings/export-tasks" download>
+            Download Tasks CSV
+          </a>
+        </Button>
+        <ImportForm
+          fileLabel="Tasks CSV file"
+          inputId="tasks-csv-file"
+          previewAction={previewTasksImportAction}
+          commitAction={commitTasksImportAction}
+        />
       </section>
 
       <section className="flex flex-col gap-3">

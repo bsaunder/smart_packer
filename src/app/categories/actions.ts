@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
-import { duplicateNameResult, type ActionResult } from "@/lib/errors";
+import { userErrorResult, type ActionResult } from "@/lib/errors";
 import { createCategory, deleteCategory, moveCategory, updateCategory } from "@/services/categoryService";
 
 export async function createCategoryAction(formData: FormData): Promise<ActionResult> {
@@ -13,7 +13,7 @@ export async function createCategoryAction(formData: FormData): Promise<ActionRe
   try {
     await createCategory(user.id, { name });
   } catch (e) {
-    return duplicateNameResult(e);
+    return userErrorResult(e);
   }
   revalidatePath("/categories");
 }
@@ -27,7 +27,7 @@ export async function updateCategoryAction(formData: FormData): Promise<ActionRe
   try {
     await updateCategory(user.id, categoryId, { name });
   } catch (e) {
-    return duplicateNameResult(e);
+    return userErrorResult(e);
   }
   revalidatePath("/categories");
 }

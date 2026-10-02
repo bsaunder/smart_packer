@@ -5,21 +5,44 @@ import { X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { addItemsToTripAction } from "./actions";
 
 export type PickerItem = {
   id: string;
   name: string;
   category: string;
   notes: string | null;
-  /** Names of every Item that comes along with this one (recursive children). */
+  /** Names of everything that comes along with this one (children / sub-tasks). */
   includes: string[];
   onTrip: boolean;
 };
 
 const MAX_SUGGESTIONS = 8;
 
-export function AddItemsPicker({ items, tripId }: { items: PickerItem[]; tripId: string }) {
+/**
+ * Search-and-pick box for adding existing master records (Items, Tasks) to a
+ * Trip: pick several into tags, then submit them all to `action` as
+ * repeated `fieldName` values.
+ */
+export function AddExistingPicker({
+  items,
+  tripId,
+  action,
+  fieldName,
+  title,
+  description,
+  placeholder,
+  noun,
+}: {
+  items: PickerItem[];
+  tripId: string;
+  action: (formData: FormData) => Promise<void>;
+  fieldName: string;
+  title: string;
+  description: string;
+  placeholder: string;
+  /** Singular label for the submit button, e.g. "item" → "Add 3 items". */
+  noun: string;
+}) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
@@ -76,7 +99,7 @@ export function AddItemsPicker({ items, tripId }: { items: PickerItem[]; tripId:
   }
 
   async function submit(formData: FormData) {
-    await addItemsToTripAction(formData);
+    await action(formData);
     setSelected([]);
   }
 
@@ -85,14 +108,12 @@ export function AddItemsPicker({ items, tripId }: { items: PickerItem[]; tripId:
   return (
     <form action={submit} className="flex flex-col gap-3 rounded-lg border p-4">
       <div>
-        <h3 className="font-medium">Add existing items</h3>
-        <p className="text-sm text-muted-foreground">
-          Search your master list. Each item brings its child items along, the same as it would through a module.
-        </p>
+        <h3 className="font-medium">{title}</h3>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       <input type="hidden" name="tripId" value={tripId} />
       {selected.map((item) => (
-        <input key={item.id} type="hidden" name="itemIds" value={item.id} />
+        <input key={item.id} type="hidden" name={fieldName} value={item.id} />
       ))}
 
       <div className="flex flex-wrap items-start gap-3">
@@ -102,9 +123,9 @@ export function AddItemsPicker({ items, tripId }: { items: PickerItem[]; tripId:
             type="search"
             role="combobox"
             aria-expanded={showDropdown}
-            aria-controls="add-items-suggestions"
+            aria-controls={`${fieldName}-suggestions`}
             aria-autocomplete="list"
-            placeholder="Search items to add…"
+            placeholder={placeholder}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -117,7 +138,7 @@ export function AddItemsPicker({ items, tripId }: { items: PickerItem[]; tripId:
           />
           {showDropdown && (
             <ul
-              id="add-items-suggestions"
+              id={`${fieldName}-suggestions`}
               role="listbox"
               className="absolute top-full z-20 mt-1 w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
             >
@@ -158,7 +179,7 @@ export function AddItemsPicker({ items, tripId }: { items: PickerItem[]; tripId:
           )}
         </div>
         <Button type="submit" disabled={selected.length === 0}>
-          {selected.length <= 1 ? "Add item" : `Add ${selected.length} items`}
+          {selected.length <= 1 ? `Add ${noun}` : `Add ${selected.length} ${noun}s`}
         </Button>
       </div>
 

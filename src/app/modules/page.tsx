@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/session";
 import { listModules } from "@/services/moduleService";
 import { listItems } from "@/services/itemService";
+import { listTasks } from "@/services/taskService";
 
 // Per-user data; must not be statically prerendered at build time.
 export const dynamic = "force-dynamic";
@@ -24,14 +25,19 @@ import {
   removeItemFromModuleAction,
   renameModuleAction,
   deleteModuleAction,
+  addTaskToModuleAction,
+  removeTaskFromModuleAction,
 } from "./actions";
 
 export default async function ModulesPage() {
   const user = await getCurrentUser();
-  const [modules, items] = await Promise.all([
+  const [modules, items, tasks] = await Promise.all([
     listModules(user.id),
     listItems(user.id),
+    listTasks(user.id),
   ]);
+  // Sub-tasks come along with their parent, so only top-level tasks are offered.
+  const topLevelTasks = tasks.filter((t) => t.active && !t.parentId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -59,7 +65,7 @@ export default async function ModulesPage() {
               <form action={deleteModuleAction}>
                 <input type="hidden" name="moduleId" value={m.id} />
                 <ConfirmSubmitButton
-                  confirmMessage={`Delete module "${m.name}"? Its items are not affected.`}
+                  confirmMessage={`Delete module "${m.name}"? Its items and tasks are not affected.`}
                   size="sm"
                   variant="ghost"
                 >
@@ -111,6 +117,54 @@ export default async function ModulesPage() {
                   </Button>
                 </form>
               )}
+
+              <div className="flex flex-col gap-2 border-t pt-3">
+                <p className="text-sm font-medium">Tasks</p>
+                {m.moduleTasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tasks yet.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {m.moduleTasks.map((mt) => (
+                      <form key={mt.taskId} action={removeTaskFromModuleAction}>
+                        <input type="hidden" name="moduleId" value={m.id} />
+                        <input type="hidden" name="taskId" value={mt.taskId} />
+                        <button
+                          type="submit"
+                          title={`Remove ${mt.task.name} from this module`}
+                          className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+                        >
+                          {mt.task.name}
+                          <X className="size-3" />
+                        </button>
+                      </form>
+                    ))}
+                  </div>
+                )}
+                {topLevelTasks.length > 0 && (
+                  <form action={addTaskToModuleAction} className="flex items-end gap-3">
+                    <input type="hidden" name="moduleId" value={m.id} />
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`taskId-${m.id}`}>Add task</Label>
+                      <Select name="taskId" required>
+                        <SelectTrigger id={`taskId-${m.id}`} className="w-56">
+                          <SelectValue placeholder="Select a task" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {topLevelTasks.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                              {t.children.length > 0 && ` (+${t.children.length})`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button type="submit" size="sm" variant="secondary">
+                      Add
+                    </Button>
+                  </form>
+                )}
+              </div>
             </CardContent>
           </Card>
         ))}

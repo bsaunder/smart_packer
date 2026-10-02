@@ -14,7 +14,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   addCustomItemAction,
+  addCustomTaskAction,
+  addItemsToTripAction,
   addModulesToTripAction,
+  addTasksToTripAction,
   createBagAction,
 } from "./actions";
 import {
@@ -27,7 +30,12 @@ import {
 } from "@/lib/packingListView";
 import { formatDateRange } from "@/lib/formatDate";
 import { PackingList } from "./packing-list";
-import { AddItemsPicker, type PickerItem } from "./add-items-picker";
+import { AddExistingPicker, type PickerItem } from "./add-existing-picker";
+import { TaskChecklist } from "./task-checklist";
+import { listTasks } from "@/services/taskService";
+import { timingLabel } from "@/lib/taskTiming";
+import { ActionForm } from "@/components/action-form";
+import { TimingFields } from "@/components/timing-fields";
 import { cn } from "@/lib/utils";
 
 function pillClass(active: boolean) {
@@ -50,12 +58,13 @@ export default async function TripDetailPage({
   const { view, filter, scope, scopeType, scopeValue } = parsed;
 
   const user = await getCurrentUser();
-  const [trip, modules, categories, items, allBags] = await Promise.all([
+  const [trip, modules, categories, items, allBags, tasks] = await Promise.all([
     getTrip(user.id, id),
     listModules(user.id),
     listCategories(user.id),
     listItems(user.id),
     listBags(user.id),
+    listTasks(user.id),
   ]);
 
   if (!trip) notFound();
@@ -70,6 +79,10 @@ export default async function TripDetailPage({
   });
 
   const pickerItems = buildPickerItems(items, trip.tripItems);
+  const taskPickerItems = buildTaskPickerItems(tasks, trip.tripTasks);
+  const tripTasks = trip.tripTasks.filter((t) => !t.removed);
+  const departureTasks = tripTasks.filter((t) => t.anchor === "DEPARTURE");
+  const returnTasks = tripTasks.filter((t) => t.anchor === "RETURN");
 
   const dateRange = formatDateRange(trip.startDate, trip.endDate);
   const allCategories = allCategoriesOf(trip);
@@ -120,6 +133,58 @@ export default async function TripDetailPage({
           </form>
         </div>
       </div>
+
+      <section className="flex flex-col gap-3 rounded-lg border p-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-lg font-medium">Pre-Departure</h2>
+          {departureTasks.length > 0 && (
+            <span className="text-sm text-muted-foreground">
+              {departureTasks.filter((t) => t.done).length}/{departureTasks.length} done
+            </span>
+          )}
+        </div>
+        {departureTasks.length > 0 ? (
+          <>
+            <TaskChecklist tasks={departureTasks} anchor="DEPARTURE" trip={trip} />
+            {!trip.startDate && (
+              <p className="text-xs text-muted-foreground">Set the trip&rsquo;s start date to see when each group is due.</p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No pre-departure tasks yet. Tasks come from this trip&rsquo;s modules, or add them below.
+          </p>
+        )}
+        <details className="rounded-md border px-3 py-2 [&[open]]:pb-3">
+          <summary className="cursor-pointer text-sm font-medium">Add tasks</summary>
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            <AddExistingPicker
+              items={taskPickerItems}
+              tripId={trip.id}
+              action={addTasksToTripAction}
+              fieldName="taskIds"
+              title="Existing tasks"
+              description="Search your Tasks list. A task brings its sub-tasks along."
+              placeholder="Search tasks to add…"
+              noun="task"
+            />
+            <ActionForm resetOnSuccess action={addCustomTaskAction} className="flex flex-col gap-3 rounded-lg border p-4">
+              <h3 className="font-medium">One-off task</h3>
+              <input type="hidden" name="tripId" value={trip.id} />
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="taskName">Task</Label>
+                <Input id="taskName" name="name" placeholder="e.g. Drop off spare key" required />
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <TimingFields idPrefix="custom-task" />
+              </div>
+              <Button type="submit" variant="secondary" className="w-fit">
+                Add task
+              </Button>
+            </ActionForm>
+          </div>
+        </details>
+      </section>
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <div className="flex items-center gap-1 rounded-full bg-muted p-1">
@@ -177,7 +242,28 @@ export default async function TripDetailPage({
 
       <PackingList groups={[...groups.entries()]} bags={bagOptions} tripId={trip.id} />
 
-      <AddItemsPicker items={pickerItems} tripId={trip.id} />
+      {returnTasks.length > 0 && (
+        <section className="flex flex-col gap-3 rounded-lg border p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-lg font-medium">After Return</h2>
+            <span className="text-sm text-muted-foreground">
+              {returnTasks.filter((t) => t.done).length}/{returnTasks.length} done
+            </span>
+          </div>
+          <TaskChecklist tasks={returnTasks} anchor="RETURN" trip={trip} />
+        </section>
+      )}
+
+      <AddExistingPicker
+        items={pickerItems}
+        tripId={trip.id}
+        action={addItemsToTripAction}
+        fieldName="itemIds"
+        title="Add existing items"
+        description="Search your master list. Each item brings its child items along, the same as it would through a module."
+        placeholder="Search items to add…"
+        noun="item"
+      />
 
       <div className="grid gap-6 sm:grid-cols-2">
         <form action={addCustomItemAction} className="flex flex-col gap-3 rounded-lg border p-4">
@@ -308,5 +394,26 @@ function buildPickerItems(
       notes: i.notes,
       includes: includes(i.id),
       onTrip: onTrip.has(i.id),
+    }));
+}
+
+/**
+ * Active master Tasks for the "add tasks" picker: grouped by when they're
+ * due, with their sub-tasks listed, and flagged if already on this trip.
+ */
+function buildTaskPickerItems(
+  tasks: Awaited<ReturnType<typeof listTasks>>,
+  tripTasks: { sourceTaskId: string | null; removed: boolean }[]
+): PickerItem[] {
+  const onTrip = new Set(tripTasks.filter((t) => !t.removed).map((t) => t.sourceTaskId));
+  return tasks
+    .filter((t) => t.active)
+    .map((t) => ({
+      id: t.id,
+      name: t.name,
+      category: timingLabel(t.anchor, t.offsetDays ?? t.parent?.offsetDays ?? 0),
+      notes: t.notes,
+      includes: t.children.filter((c) => c.active).map((c) => c.name),
+      onTrip: onTrip.has(t.id),
     }));
 }

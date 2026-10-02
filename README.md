@@ -214,3 +214,28 @@ Download either from Settings to try import, or use one as-is to seed a fresh da
 ### Export
 
 Downloads the exact same shape for every Item you own (active and inactive). Round-tripping is lossless: exporting and immediately re-importing the same file validates cleanly and updates everything in place with no new rows.
+
+## Tasks CSV
+
+Tasks (the pre-departure / after-return checklist) have their own CSV, separate from the Items CSV, with its own **Download Tasks CSV** button and import on **Settings**. It uses the same conventions: a header row, columns matched by name, `|` between multiple values, validated as a whole before anything is written, upserted by name, and additive (a blank cell never clears existing data).
+
+| Column | Required | Description |
+|---|---|---|
+| `name` | Yes | The Task's name. Unique per user; the upsert key and what `parent` references. |
+| `days` | For new top-level tasks | Whole number of days before departure (or after return). Blank on a sub-task means "same as parent". |
+| `relative_to` | No | `departure` (default) or `return`. Ignored for sub-tasks, which always follow their parent. |
+| `parent` | No | Name of the parent Task, for a sub-task. Must be a row in this file or an existing Task, and must itself be top-level (one level of sub-tasks). |
+| `modules` | No | `|`-separated Module names this Task belongs to. Modules are created automatically. A Task brings its sub-tasks, so list the parent here, not each sub-task. |
+| `notes` | No | Free-text notes. |
+| `active` | No | `true` / `false`. Defaults to `true`. |
+
+Example:
+
+```csv
+name,days,relative_to,parent,modules,notes,active
+Pets,1,departure,,Every Trip,,true
+Clean Litter Box,,,Pets,,,true
+Board Dog,3,,Pets,,Book a week ahead,true
+Get Immunizations,90,departure,,International,,true
+Pick up Dog,0,return,,Every Trip,,true
+```

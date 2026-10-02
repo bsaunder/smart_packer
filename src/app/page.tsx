@@ -11,14 +11,18 @@ import { countModules } from "@/services/moduleService";
 import { countCategories } from "@/services/categoryService";
 import { formatDateRange } from "@/lib/formatDate";
 import { getBuildInfo, REPO_URL } from "@/lib/version";
+import { listDueSoonTasks } from "@/services/tripTaskService";
+import { formatDate } from "@/lib/formatDate";
+import { timingLabel } from "@/lib/taskTiming";
 
 export default async function Dashboard() {
   const user = await getCurrentUser();
-  const [{ upcoming, previous }, itemCount, moduleCount, categoryCount] = await Promise.all([
+  const [{ upcoming, previous }, itemCount, moduleCount, categoryCount, dueSoon] = await Promise.all([
     getDashboardTripBuckets(user.id),
     countItems(user.id),
     countModules(user.id),
     countCategories(user.id),
+    listDueSoonTasks(user.id),
   ]);
 
   const stats = [
@@ -51,6 +55,38 @@ export default async function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {dueSoon.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <div>
+            <h2 className="font-heading text-lg font-semibold tracking-tight">Due Soon</h2>
+            <p className="text-sm text-muted-foreground">Unfinished trip tasks due in the next week, or recently overdue.</p>
+          </div>
+          <Card>
+            <CardContent>
+              <ul className="flex flex-col divide-y">
+                {dueSoon.map((t) => (
+                  <li key={t.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2 text-sm first:pt-0 last:pb-0">
+                    <span>
+                      {t.name}
+                      <Link href={`/trips/${t.trip.id}`} className="ml-2 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                        {t.trip.name}
+                      </Link>
+                    </span>
+                    <span className={t.overdue ? "font-medium text-destructive" : "text-muted-foreground"}>
+                      {t.overdue ? "Overdue · " : ""}
+                      {formatDate(t.due)}
+                      <span className="ml-1 hidden text-xs font-normal text-muted-foreground sm:inline">
+                        ({timingLabel(t.anchor, t.offsetDays)})
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         <h2 className="font-heading text-lg font-semibold tracking-tight">Upcoming Trips</h2>
