@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { getDescendantIds } from "@/services/itemService";
+import { uniqueName } from "@/lib/errors";
+
+const nameTaken = (name: string) => `You already have a module named "${name}".`;
 
 export async function listModules(ownerId: string) {
   return prisma.module.findMany({
@@ -14,9 +17,7 @@ export async function countModules(ownerId: string) {
 }
 
 export async function createModule(ownerId: string, input: { name: string }) {
-  return prisma.module.create({
-    data: { ownerId, name: input.name },
-  });
+  return uniqueName(prisma.module.create({ data: { ownerId, name: input.name } }), nameTaken(input.name));
 }
 
 /**
@@ -56,7 +57,7 @@ export async function renameModule(ownerId: string, moduleId: string, name: stri
   const owned = await prisma.module.count({ where: { id: moduleId, ownerId } });
   if (!owned) throw new Error("Module not found for this owner.");
 
-  return prisma.module.update({ where: { id: moduleId }, data: { name } });
+  return uniqueName(prisma.module.update({ where: { id: moduleId }, data: { name } }), nameTaken(name));
 }
 
 /** ModuleItem rows cascade automatically (onDelete: Cascade); the underlying Items are untouched. */

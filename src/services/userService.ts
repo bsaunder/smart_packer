@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { hash } from "@node-rs/argon2";
 import { prisma } from "@/lib/prisma";
+import { uniqueName } from "@/lib/errors";
 
 /**
  * Creates a User and its Better Auth credential (Account) row directly via
@@ -12,7 +13,8 @@ import { prisma } from "@/lib/prisma";
 export async function createUser(input: { username: string; password: string; isAdmin?: boolean }) {
   const passwordHash = await hash(input.password);
 
-  const user = await prisma.user.create({
+  // Usernames are unique case-insensitively (stored lowercased below).
+  const user = await uniqueName(prisma.user.create({
     data: {
       id: randomUUID(),
       // Better Auth's username plugin normalizes to lowercase on lookup
@@ -30,7 +32,7 @@ export async function createUser(input: { username: string; password: string; is
       isAdmin: input.isAdmin ?? false,
       isActive: true,
     },
-  });
+  }), `A user named "${input.username}" already exists.`);
 
   await prisma.account.create({
     data: {

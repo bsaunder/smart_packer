@@ -3,15 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentAdmin } from "@/lib/session";
 import { createUser, setUserActive, resetUserPassword } from "@/services/userService";
+import { duplicateNameResult, type ActionResult } from "@/lib/errors";
 
-export async function createUserAction(formData: FormData) {
+export async function createUserAction(formData: FormData): Promise<ActionResult> {
   await getCurrentAdmin();
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const isAdmin = formData.get("isAdmin") === "on";
   if (!username || !password) return;
 
-  await createUser({ username, password, isAdmin });
+  try {
+    await createUser({ username, password, isAdmin });
+  } catch (e) {
+    return duplicateNameResult(e);
+  }
   revalidatePath("/admin/users");
 }
 

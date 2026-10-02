@@ -2,24 +2,33 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
+import { duplicateNameResult, type ActionResult } from "@/lib/errors";
 import { createCategory, deleteCategory, moveCategory, updateCategory } from "@/services/categoryService";
 
-export async function createCategoryAction(formData: FormData) {
+export async function createCategoryAction(formData: FormData): Promise<ActionResult> {
   const user = await getCurrentUser();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
 
-  await createCategory(user.id, { name });
+  try {
+    await createCategory(user.id, { name });
+  } catch (e) {
+    return duplicateNameResult(e);
+  }
   revalidatePath("/categories");
 }
 
-export async function updateCategoryAction(formData: FormData) {
+export async function updateCategoryAction(formData: FormData): Promise<ActionResult> {
   const user = await getCurrentUser();
   const categoryId = String(formData.get("categoryId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (!categoryId || !name) return;
 
-  await updateCategory(user.id, categoryId, { name });
+  try {
+    await updateCategory(user.id, categoryId, { name });
+  } catch (e) {
+    return duplicateNameResult(e);
+  }
   revalidatePath("/categories");
 }
 

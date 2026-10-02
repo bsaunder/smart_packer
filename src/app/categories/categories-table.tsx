@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { ActionForm } from "@/components/action-form";
 import { deleteCategoryAction, moveCategoryAction, updateCategoryAction } from "./actions";
 
 type Category = {
@@ -54,13 +55,13 @@ export function CategoriesTable({ categories }: { categories: Category[] }) {
             return (
               <TableRow key={c.id}>
                 <TableCell>
-                  <form action={updateCategoryAction} className="flex items-center gap-2">
+                  <ActionForm action={updateCategoryAction} className="flex items-center gap-2">
                     <input type="hidden" name="categoryId" value={c.id} />
                     <Input name="name" defaultValue={c.name} className="h-8 w-48" />
                     <Button type="submit" size="sm" variant="ghost">
                       Save
                     </Button>
-                  </form>
+                  </ActionForm>
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">

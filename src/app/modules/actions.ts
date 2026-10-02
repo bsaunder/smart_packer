@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
+import { duplicateNameResult, type ActionResult } from "@/lib/errors";
 import {
   createModule,
   addItemToModule,
@@ -10,12 +11,16 @@ import {
   deleteModule,
 } from "@/services/moduleService";
 
-export async function createModuleAction(formData: FormData) {
+export async function createModuleAction(formData: FormData): Promise<ActionResult> {
   const user = await getCurrentUser();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
 
-  await createModule(user.id, { name });
+  try {
+    await createModule(user.id, { name });
+  } catch (e) {
+    return duplicateNameResult(e);
+  }
   revalidatePath("/modules");
 }
 
@@ -29,13 +34,17 @@ export async function addItemToModuleAction(formData: FormData) {
   revalidatePath("/modules");
 }
 
-export async function renameModuleAction(formData: FormData) {
+export async function renameModuleAction(formData: FormData): Promise<ActionResult> {
   const user = await getCurrentUser();
   const moduleId = String(formData.get("moduleId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (!moduleId || !name) return;
 
-  await renameModule(user.id, moduleId, name);
+  try {
+    await renameModule(user.id, moduleId, name);
+  } catch (e) {
+    return duplicateNameResult(e);
+  }
   revalidatePath("/modules");
 }
 

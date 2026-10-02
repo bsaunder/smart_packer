@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ActionForm } from "@/components/action-form";
 import {
   Select,
   SelectContent,
@@ -36,25 +37,25 @@ export default async function ModulesPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Modules</h1>
 
-      <form action={createModuleAction} className="flex items-end gap-3">
+      <ActionForm resetOnSuccess action={createModuleAction} className="flex items-end gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">New module</Label>
           <Input id="name" name="name" placeholder="e.g. Cruise" required />
         </div>
         <Button type="submit">Add</Button>
-      </form>
+      </ActionForm>
 
       <div className="flex flex-col gap-4">
         {modules.map((m) => (
           <Card key={m.id}>
             <CardHeader className="flex flex-row items-center justify-between gap-3">
-              <form action={renameModuleAction} className="flex items-center gap-2">
+              <ActionForm action={renameModuleAction} className="flex items-center gap-2">
                 <input type="hidden" name="moduleId" value={m.id} />
                 <Input name="name" defaultValue={m.name} className="h-8 w-56 text-base font-semibold" />
                 <Button type="submit" size="sm" variant="ghost">
                   Save
                 </Button>
-              </form>
+              </ActionForm>
               <form action={deleteModuleAction}>
                 <input type="hidden" name="moduleId" value={m.id} />
                 <ConfirmSubmitButton

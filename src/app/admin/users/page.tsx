@@ -3,6 +3,7 @@ import { listUsers } from "@/services/userService";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ActionForm } from "@/components/action-form";
 import {
   Table,
   TableBody,
@@ -26,7 +27,7 @@ export default async function AdminUsersPage() {
         <h1 className="text-2xl font-semibold">Users</h1>
         <p className="text-muted-foreground">
           Accounts are admin-created — there is no self-service signup (DESIGN.md
-          "Account provisioning"). Password resets are admin-driven too, since
+          &ldquo;Account provisioning&rdquo;). Password resets are admin-driven too, since
           Version 1 has no mail server.
         </p>
       </div>
@@ -83,7 +84,7 @@ export default async function AdminUsersPage() {
         </TableBody>
       </Table>
 
-      <form action={createUserAction} className="flex flex-col gap-4 rounded-lg border p-4">
+      <ActionForm resetOnSuccess action={createUserAction} className="flex flex-col gap-4 rounded-lg border p-4">
         <h3 className="font-medium">Create user</h3>
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1.5">
@@ -102,7 +103,7 @@ export default async function AdminUsersPage() {
         <Button type="submit" className="w-fit">
           Create user
         </Button>
-      </form>
+      </ActionForm>
     </div>
   );
 }

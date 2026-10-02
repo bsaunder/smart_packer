@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { uniqueName } from "@/lib/errors";
+
+const nameTaken = (name: string) => `You already have a category named "${name}".`;
 
 export async function listCategories(ownerId: string) {
   return prisma.category.findMany({
@@ -21,13 +24,16 @@ export async function createCategory(
     orderBy: { sortOrder: "desc" },
   });
 
-  return prisma.category.create({
-    data: {
-      ownerId,
-      name: input.name,
-      sortOrder: (last?.sortOrder ?? -1) + 1,
-    },
-  });
+  return uniqueName(
+    prisma.category.create({
+      data: {
+        ownerId,
+        name: input.name,
+        sortOrder: (last?.sortOrder ?? -1) + 1,
+      },
+    }),
+    nameTaken(input.name)
+  );
 }
 
 export async function findOrCreateCategoryByName(
@@ -49,10 +55,13 @@ export async function updateCategory(
   const existing = await prisma.category.findFirst({ where: { id: categoryId, ownerId } });
   if (!existing) throw new Error("Category not found for this owner.");
 
-  return prisma.category.update({
-    where: { id: categoryId },
-    data: { name: input.name },
-  });
+  return uniqueName(
+    prisma.category.update({
+      where: { id: categoryId },
+      data: { name: input.name },
+    }),
+    nameTaken(input.name)
+  );
 }
 
 /**
