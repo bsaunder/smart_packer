@@ -2,19 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { Luggage } from "lucide-react";
 import { auth } from "@/lib/auth";
-import { SignOutButton } from "@/components/sign-out-button";
 import { NavLinks } from "@/components/nav-links";
-
-const links = [
-  { href: "/", label: "Dashboard" },
-  { href: "/categories", label: "Categories" },
-  { href: "/items", label: "Items" },
-  { href: "/bags", label: "Bags" },
-  { href: "/modules", label: "Modules" },
-  { href: "/trips", label: "Trips" },
-  { href: "/trips/history", label: "History" },
-  { href: "/settings", label: "Settings" },
-];
 
 export async function Nav() {
   // Direct session check (not getCurrentUser, which redirects) — the nav
@@ -27,8 +15,6 @@ export async function Nav() {
   const session = await auth.api.getSession({ headers: await headers() });
   const signedIn = session?.user?.isActive ?? false;
 
-  const visibleLinks = signedIn && session!.user.isAdmin ? [...links, { href: "/admin/users", label: "Admin" }] : links;
-
   return (
     <nav className="sticky top-0 z-10 border-b border-border/60 bg-background/85 backdrop-blur-sm">
       <div className="mx-auto flex max-w-4xl items-center gap-6 px-6 py-3">
@@ -38,13 +24,7 @@ export async function Nav() {
           </span>
           Smart Packing Planner
         </Link>
-        {signedIn && (
-          <>
-            <NavLinks links={visibleLinks} />
-            <span className="text-sm text-muted-foreground">{session!.user.username}</span>
-            <SignOutButton />
-          </>
-        )}
+        {signedIn && <NavLinks username={session!.user.username ?? session!.user.name} isAdmin={!!session!.user.isAdmin} />}
       </div>
     </nav>
   );
