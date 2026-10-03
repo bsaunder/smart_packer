@@ -30,6 +30,7 @@ import {
 } from "@/lib/packingListView";
 import { formatDateRange } from "@/lib/formatDate";
 import { PackingList } from "./packing-list";
+import { ScopeSelect } from "./scope-select";
 import { AddExistingPicker, type PickerItem } from "./add-existing-picker";
 import { TaskChecklist } from "./task-checklist";
 import { listTasks } from "@/services/taskService";
@@ -55,7 +56,7 @@ export default async function TripDetailPage({
   const { id } = await params;
   const rawParams = await searchParams;
   const parsed = parseViewParams(rawParams);
-  const { view, filter, scope, scopeType, scopeValue } = parsed;
+  const { view, filter, scope } = parsed;
 
   const user = await getCurrentUser();
   const [trip, modules, categories, items, allBags, tasks] = await Promise.all([
@@ -206,38 +207,19 @@ export default async function TripDetailPage({
             Unpacked
           </Link>
         </div>
-        <div className="flex flex-wrap items-center gap-1 rounded-full bg-muted p-1">
-          <span className="px-2 text-xs font-medium text-muted-foreground">Show:</span>
-          <Link href={scopeLink("all")} className={pillClass(scope === "all")}>
-            All
-          </Link>
-          {allCategories.map((c) => (
-            <Link
-              key={`cat-${c}`}
-              href={scopeLink(`category:${c}`)}
-              className={pillClass(scopeType === "category" && scopeValue === c)}
-            >
-              {c}
-            </Link>
-          ))}
-          {trip.bags.map((bag) => (
-            <Link
-              key={`bag-${bag.id}`}
-              href={scopeLink(`bag:${bag.id}`)}
-              className={pillClass(scopeType === "bag" && scopeValue === bag.id)}
-            >
-              {bag.name}
-            </Link>
-          ))}
-          {trip.bags.length > 0 && (
-            <Link
-              href={scopeLink("bag:unassigned")}
-              className={pillClass(scopeType === "bag" && scopeValue === "unassigned")}
-            >
-              Unassigned
-            </Link>
-          )}
-        </div>
+        <ScopeSelect
+          scope={scope}
+          allHref={scopeLink("all")}
+          categories={allCategories.map((c) => ({ scope: `category:${c}`, label: c, href: scopeLink(`category:${c}`) }))}
+          bags={
+            trip.bags.length > 0
+              ? [
+                  ...trip.bags.map((bag) => ({ scope: `bag:${bag.id}`, label: bag.name, href: scopeLink(`bag:${bag.id}`) })),
+                  { scope: "bag:unassigned", label: "Unassigned", href: scopeLink("bag:unassigned") },
+                ]
+              : []
+          }
+        />
       </div>
 
       <PackingList groups={[...groups.entries()]} bags={bagOptions} tripId={trip.id} />
